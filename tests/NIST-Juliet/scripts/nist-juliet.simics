@@ -1,0 +1,8 @@
+run-python-file scripts/init.py
+run-python-file tests/NIST-Juliet/scripts/pyscripts.py
+
+script-branch "nist-juliet" {
+	@nist_juliet_upload_and_run()
+}
+enable-real-time-mode
+run

@@ -1,0 +1,253 @@
+# Common LIM run script
+
+if not defined exit { $exit = 0 }
+$mandatory_variables = ["workload_name"]
+foreach $var in $mandatory_variables {
+	if not defined $var { 
+		echo "Error: variable " + $var + " not defined. Exiting."
+		exit 1
+	}
+}
+
+if not defined checkpoint { $checkpoint = "checkpoints/cc_glibc.ckpt"}
+echo "Using checkpoint: " + $checkpoint
+if not defined system { $system = "board" }
+if not defined compiler { $compiler = "g++"}
+if not defined gcc_flags { $gcc_flags = ""}
+if defined wrap { $gcc_flags = "-Wall -Wl,--wrap,malloc -Wl,--wrap,calloc -Wl,--wrap,realloc -Wl,--wrap,free " + $gcc_flags}
+if not defined wrap_flags { $wrap_flags = "" }
+if not defined run_args { $run_args = "" }
+if not defined model { $model = "cc" }
+if $model == "cc" {
+	$env_vars = "CC_ENABLED=1"
+} else if $model == "lim" {
+	$env_vars = "LIM_ENABLED=1"
+	if defined trace_only { $env_vars = $env_vars + " TRACE_ONLY=1"}
+} else if $model == "native" {
+    $env_vars = ""
+} else {
+    echo "ERROR: need to specify model=cc|lim|native. Exiting"
+    exit 1
+}
+read-configuration $checkpoint
+$system.console.con.hide
+if $system == "tgl" {
+    tgl.i82571EBv2.mac[1].bank.log-level 0
+    tgl.mb.sb.pmc.log-level 0
+}
+$con = $system.serconsole.con
+$cpu = $system.mb.cpu0.core[0][0]
+
+run-python-file scripts/init.py
+
+$start_time=0
+$end_time=0
+
+$branch_id = (script-branch "workload" {
+	# Send in a newline to trigger a prompt
+	$con.input "cd\n"
+    #$con.wait-then-write "$ " "echo Starting simulation now! \n"
+    #add-session-comment "command echo issued"
+	# run for one/tenth second to give the hardware time to update
+	$cpu.wait-for-time 0.1 -relative
+	
+	###############################
+	#     Upload Source files     #
+	###############################
+    echo "Transferring source files to target... This will take a few seconds..."
+    start-agent-manager
+	agent_manager.connect-to-agent
+	if defined src_file {
+		$src_full_path = "%simics%/"+ $src_path + "/" + $src_file
+		matic0.upload (lookup-file $src_full_path) "/home/simics/"
+	}
+	if defined include_file {
+		$include_full_path = "%simics%/"+ $src_path + "/" + $include_file
+		matic0.upload (lookup-file $include_full_path) "/home/simics/"
+	}
+	if $model == "cc" {
+		matic0.upload (lookup-file "%simics%/malloc/cc_malloc.c") "/home/simics/"
+		matic0.upload (lookup-file "%simics%/malloc/cc_globals.h") "/home/simics/"
+		matic0.upload (lookup-file "%simics%/malloc/utils.h") "/home/simics/"
+		matic0.upload (lookup-file "%simics%/malloc/cc_encoding.h") "/home/simics/"
+		matic0.upload (lookup-file "%simics%/malloc/cc_encoding.c") "/home/simics/"
+	} else if $model == "lim" {
+		matic0.upload (lookup-file "%simics%/malloc/lim_ptr_encoding.h") "/home/simics/"
+	}
+
+	matic0.wait-for-job
+	@command_to_console("sudo chown -R simics:simics *")
+    echo "Done transferring source files to target"
+    @command_to_console("echo 0 | sudo tee /proc/sys/kernel/randomize_va_space")
+	disable-real-time-mode
+	#################################
+
+	###############################
+	#     Compile & run           #
+	###############################
+	if not defined obj_files {
+		$obj_files = $src_file
+	} else {
+		echo "Overriding obj_files with: " + $obj_files
+	}
+	if not defined build_cmd { $build_cmd = $compiler + " " + $gcc_flags + " " + "-o " + $workload_name + " " + $obj_files  }
+	if not defined bin_path { $bin_path = "/home/simics"}
+	if not defined run_cmd { $run_cmd = "./" + $workload_name + " " + $run_args } 
+	echo "Build command: " + $build_cmd
+	if $model == "cc" or $model == "lim" or $model == "native" {
+		if not defined wrap {
+			#glibc wrap
+			@command_to_console(simenv.build_cmd)
+			if defined download_bin_path {
+				enable-real-time-mode
+				matic0.download -overwrite from=($bin_path + "/" + $workload_name) to=$download_bin_path
+				matic0.download -overwrite from=("/home/simics/glibc/glibc-2.30_install/lib/libc-2.30.so") to=$download_bin_path
+				matic0.wait-for-job
+				disable-real-time-mode
+				@setup_debug()
+			}
+			@command_to_console("cp " + simenv.workload_name + " " + simenv.workload_name + "_orig")
+			@command_to_console("patchelf --set-interpreter /home/simics/glibc/glibc-2.30_install/lib/ld-2.30.so --set-rpath /home/simics/glibc/glibc-2.30_install/lib " + simenv.workload_name)
+			@command_to_console("ln -nsf /usr/lib64/libgtest.so.0 /home/simics/glibc/glibc-2.30_install/lib")
+			@command_to_console("ln -nsf /usr/lib64/libgomp.so.1 /home/simics/glibc/glibc-2.30_install/lib")
+			@command_to_console("mkdir -p /home/simics/glibc/glibc-2.30_install/share/zoneinfo")
+			@command_to_console("ln -nsf /usr/share/zoneinfo/UTC /home/simics/glibc/glibc-2.30_install/share/zoneinfo/UTC")
+			$run_cmd = $env_vars + " " + $run_cmd
+		} else {
+			#LD --wrap option
+			@command_to_console("gcc -Wall " + simenv.wrap_flags + " -c -o " + simenv.wrapper_obj + " " + simenv.wrapper_src)
+			$build_cmd += (" " + $wrapper_obj)
+			if $model == "cc" {
+				# Adding k_cipher.o and encoding.o
+				@command_to_console("gcc -O3 -c -o cc_encoding.o cc_encoding.c")
+				$build_cmd += " cc_encoding.o" 
+			}
+			@command_to_console(simenv.build_cmd)
+		}
+	}
+
+	if defined pre_run_fixup {
+		@command_to_console(simenv.pre_run_fixup)
+	}
+	echo "Running model: " + $model
+	if $model == "native" {
+		if defined cache {
+			run-command-file scripts/setup-lim-caches.simics
+			$model_inst = lim_0
+		}
+	} else if $model == "cc" {
+        if defined disable_encryption {
+            echo "Disabling data encryption"
+            $model_inst = (new-cc-model -connect-all -disable-data-encryption)
+        } else {
+            $model_inst = (new-cc-model -connect-all)
+        }
+		$model_inst += "_0"
+	} else if $model == "lim" {
+		if defined cache {
+			run-command-file scripts/setup-lim-caches.simics
+			$model_inst = lim_0
+		} else {
+			if defined trace_only {
+				$model_inst = (new-lim-model -connect-all -trace-only name = lim)
+			} else {
+				$model_inst = (new-lim-model -connect-all name = lim)
+			}
+			$model_inst += "_0"
+		}
+	}
+	if  defined debug {
+		$model_inst->debug_on=TRUE
+	}
+	if defined disable_meta_check {
+		if $model == "lim" {
+			$model_inst->disable-meta-check=TRUE
+		}
+	}
+	if defined break_on_exception {
+		if $model == "lim" {
+			$model_inst->break_on_exception=TRUE
+		}
+	}
+	if $system != "tgl" {
+        #$system.software.enable-tracker
+    }
+	if defined magic { enable-magic-breakpoint }
+	echo "Run command: " + $run_cmd
+	echo "Start time: " + (date)
+	echo "Simulation timestamp before workload:  "
+	$start_time = (date -t)
+	if defined mem_profiler {
+		$mem_profiler = (new-memory-profiler -connect-all -read-logical -write-logical -execute-logical)
+		$pattern ="name='" + $workload_name + "'"
+		#$pf = (new-process-filter software-component = $system.software pattern = $pattern)	
+		#$mem_profiler.add-filter filter = $pf
+	}
+	if defined instr_hist {
+		$ihn = (new-instruction-histogram -connect-all view = x86-normalized)
+		$pattern ="name='" + $workload_name + "'"
+		$pf = (new-process-filter software-component = board.software pattern = $pattern)
+		$ihn.add-filter filter = $pf
+		echo "Instruction profiler enabled name=" + $ihn
+		$con.input "\n"
+		local $prompt = "$ "
+		$con.wait-then-write $prompt ($run_cmd + "\n")
+		$con.wait-for-string $prompt
+		stop
+		$ihn.histogram
+	}
+
+	ptime 
+	if defined run_cycles {
+		$con.input $run_cmd + "\n"
+		stop
+		# cc 1000000000 #1min
+		$part_cycles = $run_cycles * 10000000
+		echo "Running for " + $run_cycles + " billion cycles.."
+		foreach $i in (range 100){
+			$percent = $i*1
+			echo $percent + "%"
+			cc $part_cycles 
+		}
+	} else {
+		@command_to_console(simenv.run_cmd)
+	}
+	$end_time = (date -t)
+
+	#Post run commands:
+	if defined post_run_cmd {
+		@command_to_console(simenv.post_run_cmd)
+	}
+
+	if defined cache {
+		if defined cache_stat_file { start-command-line-capture -overwrite filename=$cache_stat_file }
+		lim_0.dl1.statistics
+		lim_0.il1.statistics
+		lim_0.l2.statistics
+		lim_0.l3.statistics
+		lim_0->print_stats
+		if defined cache_stat_file { stop-command-line-capture }
+	}
+	echo "Done running " + $workload_name + "!"
+	stop
+	if $exit != 0 {
+		exit 
+	}
+})
+
+#run-python-file example.py
+enable-real-time-mode
+
+if defined custom_start_workload {
+    echo "Executing custom start_workload routine."
+	@start_workload()
+} else {
+    run
+}
+
+echo  "Simulation timestamp after workload:   "
+ptime 
+echo "End time: " +(date)
+$simulation_time= $end_time - $start_time
+echo "Simulation time: " + $simulation_time + "s"
+	

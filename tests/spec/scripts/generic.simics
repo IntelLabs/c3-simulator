@@ -1,0 +1,1 @@
+run-command-file (lookup-file "%simics%/internal/spec/scripts/generic_shared.simics")

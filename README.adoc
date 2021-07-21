@@ -1,0 +1,195 @@
+= Cryptographic Computing model for Simics
+:source-highlighter: pygments
+:source-language: bash
+
+:ispm-base: intel-simics-package-manager-1.1.0
+:simics-base: /opt/simics/simics-6.0.89
+:simics-pkg-ver: 2021.24
+:simics-pkg-ver-stem: simics-6-packages-2021-24-linux64
+:simics-repo-url: https://github.com/IntelLabs/cc-simulator
+
+WARNING: The contents of this repository and linked repositories are solely for
+research purposes and may contain software with vulnerabilities, such as
+outdated libraries. Do not use in production.
+
+== Installation
+
+=== Clone source code
+
+[source,subs=attributes]
+----
+git clone --recurse-submodules {simics-repo-url}
+----
+
+Assign the full path of the clone directory to an environment variable named `CC_SIMICS`.
+
+=== Download and install required packages
+
+Download and install Simics v.{simics-pkg-ver} from https://software.intel.com/content/www/us/en/develop/articles/simics-simulator.html.
+
+Create an `/opt/simics` directory owned by the current user.
+
+The following commands can be executed in a directory where both the Simics
+package bundle and the package manager archive have been downloaded to install
+Simics:
+
+[source,subs=attributes]
+----
+tar xf {ispm-base}.tar.gz
+{ispm-base}/ispm packages --install-bundle {simics-pkg-ver-stem}.ispm --install-dir {simics-base} --non-interactive
+----
+
+Next, launch the package manager GUI with `{ispm-base}/ispm-gui` to associate the needed addons with the Simics base package using the following steps:
+
+1. Click the "Addons" tab.
+2. Select "QSP-x86", "QSP-Clear-Linux", and "QSP-CPU".
+3. Client "Save updates".
+4. Close the package manager GUI.
+
+The Simics VMP module should be installed and enabled if possible to significantly accelerate simulation:
+
+[source,subs=attributes]
+----
+{simics-base}/bin/vmp-kernel-install
+----
+
+NOTE: The following steps can be automated on Ubuntu Linux 20.04 by executing `$CC_SIMICS/install_packages.sh`.
+
+* bison
+* flex
+* gcc 8
+* python 3
+* python package xdist (install with 'pip install pytest-xdist')
+
+=== Initialize and build Simics project
+
+NOTE: The following steps can be automated by running `$CC_SIMICS/setup_and_build.sh`.
+
+==== Initialize Simics project file
+
+* From `$CC_SIMICS/..`, run: `<simics_install_path>/bin/project-setup --ignore-existing-files cc-simics`
+
+==== Build glibc
+
+* `cd $CC_SIMICS/glibc`
+* `./make_glibc.sh`
+
+==== Build Cryptographic Computing Simics module
+
+* `cd $CC_SIMICS`
+* `make -B`
+
+==== Download patchelf package
+
+Save https://github.com/NixOS/patchelf/archive/refs/tags/0.10.tar.gz as patchelf-0.10.tar.gz in `$CC_SIMICS`.
+
+==== Build glibc
+
+* `cd glibc`
+* `./make_glibc.sh`
+* `cd ..`
+
+==== Upload glibc into Simics target and save a checkpoint
+
+* `mkdir -p checkpoints`
+* `./simics -batch-mode scripts/make_glibc.simics buildmode=upload save_checkpoint=checkpoints/cc_glibc.ckpt`
+
+The checkpoint will be saved in `checkpoints/cc_glibc.ckpt`.
+
+== Running a workload in Simics
+
+./simics [simics_args] <run_script.simics> [run_arg1=val1 run_arg2=val2 ...]
+
+Useful simics_args (optional):
+
+	-no-win 		run simics with GUI windows hidden (can be displayed on demand)
+
+	-batch-mode		run in batch mode (will exit with 0 on success or non-zero on error)
+
+
+Most run scripts are based on the generic template scripts/runworkload_common.simics
+It supports the following run-time arguments (see default values in the script):
+	
+	checkpoint		Specifies the checkpoint. 
+
+        system                  Sets the top level module. For QSP use "board" (default), for TGL: "tgl"
+
+	compiler		Overrides the compiler for the workload (unless using custom build command).
+				Default: g++
+        
+	gcc_flags		Additional compiler flags
+        
+	model			Selects the model to run the workload with.
+				Values: lim / native.
+        
+	run_args		Specifies additional workload run arguments
+        
+	env_vars		Overrides environment arguments for the workload run command
+        
+	build_cmd		Overrides the default build command
+        
+	run_cmd			Overrides the default run command
+        
+	pre_run_fixup		Additional bash commands to execute inside Simics before running the workload
+        
+	debug			Set to 1 to enable Simics module debug printfs
+        
+	download_binary_path	If defined, the workload binary will be downloaded to the specified host location
+
+	disable_meta_check	LIM-only setting. If set to 1, tags and bounds will not be evaluated
+
+	break_on_exeption	LIM-only setting. If set to 1, will stop simulation on exeptions (excl. Page Fault)
+        
+	magic			Set to 1 to enable magic breakpoint
+        
+	mem_profiler		Set to 1 to enable memory profiler
+        
+	run_cycles=N		If set, the workload will run for N billion cycles and pause.
+				Default: and stop after completion
+
+	cache			Set to 1 to enable caching model
+
+	exit			Set to 1 to exit on completion (code 0) or error (non-zero code)
+
+Additional run-time arguments for specific scripts:
+spec/scripts/generic.simics:
+
+	spec			Specifies the SPEC workload name.
+
+	spec_size		Specifies the SPEC experiment size (test/ref)
+
+
+Useful examples:
+
+        ./simics spec/scripts/generic.simics spec=libquantum spec_size=test model=lim cache=1
+
+        ./simics unit_tests/runtest_common.simics model=lim workload_name=lim_malloc_test src_path=unit_tests src_file=lim_malloc_test.cpp run_args="--gtest_filter=Calloc*"
+
+== Regression Testing with PyTest:
+
+Run all tests (12 jobs in parallel):
+
+	pytest -n12 -v python_tests --checkpoint /path/to/checkpoint.ckpt [--model <native|cc|lim>]
+
+Run only spec tests:
+
+	all spec workloads:
+		pytest -n12 -v python_tests/test_spec.py --checkpoint /path/to/checkpoint.ckpt
+
+	specific workloads:
+		pytest -v python_tests/test_spec.py --checkpoint /path/to/checkpoint.ckpt --spec <workload_name> --spec <workload_name> ...
+
+Run only unit tests:
+
+	pytest -n12 -v python_tests/test_unit.py --checkpoint /path/to/checkpoint.ckpt
+
+Common options:
+	
+	--model			Run tests only with the specified model.
+				Can specify multiple by appending '--model <model_name>' for each model
+		
+
+
+
+
+

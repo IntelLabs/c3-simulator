@@ -1,0 +1,3 @@
+[submodule "glibc/src"]
+	path = glibc/src
+	url = ../cc-glibc

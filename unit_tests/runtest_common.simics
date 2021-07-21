@@ -1,0 +1,9 @@
+# Common LIM GTEST script
+
+$gcc_flags = "-g -lgtest -pthread "
+if not defined run_args { $run_args = "" }
+$run_args +=" --gtest_break_on_failure "
+if not defined wrap_flags { $wrap_flags = "" }
+$wrap_flags += " -Werror"
+
+run-command-file (lookup-file "%simics%/scripts/runworkload_common.simics")

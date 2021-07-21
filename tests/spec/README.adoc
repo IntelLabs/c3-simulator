@@ -1,0 +1,15 @@
+= SPEC benchmark support
+
+This directory provides scripts for automating SPEC benchmark runs with the
+Cryptographic Computing models. They require that SPEC 2006 and/or SPEC 2017
+C and C++ workloads be placed in subdirectories. Specifically, each subdirectory
+should be named according to the name of the workload, with "17" appended for
+SPEC 2017 workloads except those that already end in a digit. For those, "_17"
+must be appended to the name. Within each subdirectory, the source code for the
+SPEC workloads should be placed in a nested subdirectory named `src`.
+
+== Running SPEC benchmarks locally
+
+To launch SPEC benchmarks locally, use the `run_all_on_local06.sh` or
+`run_all_on_local17.sh` scripts for SPEC 2006 or SPEC 2017, respectively.
+Logs will be placed in `run_on_local_results06` or `run_on_local_results17`.

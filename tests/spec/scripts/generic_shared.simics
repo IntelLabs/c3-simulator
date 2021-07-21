@@ -1,0 +1,270 @@
+if not defined exit { $exit = 0}
+run-python-file scripts/init.py
+
+if defined wrap { 
+    echo "ERROR: wrap is not supported for SPEC workloads. Exiting"
+    exit 1
+}
+if not defined spec { 
+    echo "ERROR: need to define spec=<spec_name>. Exiting"
+    exit 1
+}
+if not defined spec_size {
+    echo "ERROR: need to specify spec_size=test|ref. Exiting"
+    exit 1
+}
+if not defined model { $model = "cc" }
+$prefix = $model
+
+$disable_meta_check=1
+
+if $model == "cc" {
+	$env_vars = "CC_ENABLED=1"
+} else if $model == "lim" {
+    $env_vars = "LIM_ENABLED=1"
+	if defined trace_only { $env_vars = $env_vars + " TRACE_ONLY=1"}
+} else if $model == "native" {
+    $env_vars = ""
+} else {
+    echo "ERROR: need to specify model=cc|lim|native. Exiting"
+    exit 1
+}
+
+if $spec_size == "test" {
+    if $spec == "astar" {
+        $run_args_list = ["lake.cfg > lake.out"]
+        $diff_cmd_list = ["diff -q lake.out lake.out.ref"]
+    } else if $spec == "blender17" {
+        $pre_run_fixup = "mv control-test control"
+        $run_args_list = ["cube.blend --render-output cube_ --threads 1 -b -F RAWTGA -s 1 -e 1 -a > cube.1.spec.out"]
+        $diff_cmd_list = ["diff -q cube.1.spec.out cube.1.spec.out.ref", "diff -q cube_0001.tga cube_0001.tga.ref"]
+    } else if $spec == "bzip" {
+        $run_args_list = ["input.program 5", "dryer.jpg 2"]
+    } else if $spec == "dealII" {
+        $run_args_list = ["8"]
+    } else if $spec == "deepsjeng17" {
+        $run_args_list = ["test.txt > test.out"]
+        $diff_cmd_list = ["diff -q test.out test.out.ref"]
+    } else if $spec == "gcc17" {
+        $run_args_list = ["t1.c -O3 -finline-limit=50000 -o t1.opts-O3_-finline-limit_50000.s > t1.opts-O3_-finline-limit_50000.out"]
+        $diff_cmd_list = ["diff -q t1.opts-O3_-finline-limit_50000.s t1.opts-O3_-finline-limit_50000.s.ref"]
+    } else if $spec == "gobmk" {
+        $run_args_list = ["--quiet --mode gtp < capture.tst > capture.out", "--quiet --mode gtp < connect.tst  > connect.out", "--quiet --mode gtp < connect_rot.tst  > connect_rot.out", "--quiet --mode gtp < connection.tst  > connection.out", "--quiet --mode gtp < connection_rot.tst  > connection_rot.out", "--quiet --mode gtp < cutstone.tst  > cutstone.out", "--quiet --mode gtp < dniwog.tst  > dniwog.out"]
+    } else if $spec == "h264ref" {
+        $run_args_list = ["-d foreman_test_encoder_baseline.cfg > test_out.log"]
+    } else if $spec == "hmmer" {
+        $run_args_list = ["--fixed 0 --mean 325 --num 45000 --sd 200 --seed 0 bombesin.hmm > bombesin.out"]
+    } else if $spec == "imagick17" {
+        $run_args_list = ["-limit disk 0 test_input.tga -shear 25 -resize 640x480 -negate -alpha Off test_output.tga"]
+        $diff_cmd_list = ["diff --brief test_output.tga test_output.tga.ref"]
+    } else if $spec == "lbm" {
+        $run_args_list = ["20 reference.dat 0 1 100_100_130_cf_a.of > lbm.out"]
+    } else if $spec == "lbm17" {
+        $pre_run_fixup = "cp lbm-test.in lbm.in"
+        $run_args_list = ["20 reference.dat 0 1 200_200_260_ldc.of > lbm-test.out"]
+        $diff_cmd_list = ["diff -q lbm-test.out lbm-test.out.ref"]
+    } else if $spec == "leela17" {
+        $run_args_list = ["test.sgf > test.out"]
+        $diff_cmd_list = ["diff -q test.out test.out.ref"]
+    } else if $spec == "libquantum" {
+        $run_args_list = ["33 5 > test.out"]
+    } else if $spec == "mcf" {
+        $run_args_list = ["inp_test.in > inp_test.out"]
+    } else if $spec == "mcf17" {
+        $run_args_list = ["inp_test.in > inp_test.out"]
+        $diff_cmd_list = ["diff -q inp_test.out inp_test.out.ref"]
+    } else if $spec == "milc" {
+        $run_args_list = ["<su3imp_test.in > output_test.txt"]
+    } else if $spec == "nab17" {
+        $run_args_list = ["hkrdenq 1930344093 1000 > hkrdenq.out"]
+        $diff_cmd_list = ["diff -q hkrdenq.out hkrdenq.out.ref"]
+    } else if $spec == "namd" {
+        $run_args_list = ["--input namd.input --iterations 1 --output namd_test.out"]
+    } else if $spec == "namd17" {
+        $run_args_list = ["--input apoa1.input --iterations 1 --output apoa1.test.output > namd.out"]
+        $diff_cmd_list = ["diff -q apoa1.test.output apoa1.test.output.ref", "diff -q namd.out namd.out.ref"]
+    } else if $spec == "omnetpp" {
+        $pre_run_fixup = "mv omnetpp.ini omnetpp_ref.ini && mv omnetpp_test.ini omnetpp.ini"
+        $run_args_list = ["omnetpp.ini > omnetpp_test.log"]
+    } else if $spec == "omnetpp17" {
+        $pre_run_fixup = "mv omnetpp.ini omnetpp_ref.ini && mv omnetpp_test.ini omnetpp.ini"
+        $run_args_list = ["-c General -r 0 > omnetpp.test.out"]
+        $diff_cmd_list = ["diff -q omnetpp.test.out omnetpp.test.out.ref"]
+    } else if $spec == "parest17" {
+        $run_args_list = ["test.prm > test.out"]
+        $diff_cmd_list = ["diff -q test.out test.out.ref"]
+    } else if $spec == "perlbench" {
+        $run_args_list = ["-I. -I./lib attrs.pl" , "-I. -I./lib gv.pl" , "-I. -I./lib makerand.pl" , "-I. -I./lib pack.pl" , "-I. -I./lib redef.pl" , "-I. -I./lib ref.pl" , "-I. -I./lib regmesg.pl" , "-I. -I./lib test.pl" ]
+    } else if $spec == "perlbench17" {
+        $run_args_list = ["-I. -I./lib makerand.pl > makerand.out"]
+        $diff_cmd_list = ["diff -q makerand.out makerand.out.ref"]
+    } else if $spec == "povray" {
+        $run_args_list = ["SPEC-benchmark-test.ini > SPEC-benchmark_test.log"]
+    } else if $spec == "povray17" {
+        $run_args_list = ["SPEC-benchmark-test.ini > SPEC-benchmark-test.stdout"]
+        $diff_cmd_list = ["diff -q SPEC-benchmark.tga SPEC-benchmark-test.tga.ref"]
+    } else if $spec == "sjeng" {
+        $run_args_list = ["test.txt > test.out"]
+    } else if $spec == "soplex" {
+        $run_args_list = ["-m10000 test.mps > test.out"]
+    } else if $spec == "sphinx" {
+        $pre_run_fixup = "cp COPY_FOR_TEST/* ./"
+        $run_args_list = ["ctlfile . args.an4 2>&1 > an4_test.log"]
+    } else if $spec == "x264_17" {
+        $run_args_list = ["--dumpyuv 50 --frames 5 -o BuckBunny_New.264 BuckBunny.yuv 1280x720 > test.out"]
+        $diff_cmd_list = ["diff -q BuckBunny_New.264 BuckBunny_New.264.ref"]
+    } else if $spec == "xalancbmk" {
+        $run_args_list = ["-v test.xml xalanc.xsl > test.out"]
+    } else if $spec == "xalancbmk17" {
+        $run_args_list = ["-v test.xml xalanc.xsl > test-test.out"]
+        $diff_cmd_list = ["diff -q test-test.out test-test.out.ref"]
+    } else if $spec == "xz17" {
+        $run_args_list = ["cpu2006docs.tar.xz 4 055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae 1548636 1555348 0 > cpu2006docs.tar-4-0.out", "cpu2006docs.tar.xz 4 055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae 1462248 -1 1 > cpu2006docs.tar-4-1.out", "cpu2006docs.tar.xz 4 055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae 1428548 -1 2 > cpu2006docs.tar-4-2.out", "cpu2006docs.tar.xz 4 055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae 1034828 -1 3e > cpu2006docs.tar-4-3e.out", "cpu2006docs.tar.xz 4 055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae 1061968 -1 4 > cpu2006docs.tar-4-4.out", "cpu2006docs.tar.xz 4 055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae 1034588 -1 4e > cpu2006docs.tar-4-4e.out", "cpu2006docs.tar.xz 1 055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae 650156 -1 0 > cpu2006docs.tar-1-0.out ", "cpu2006docs.tar.xz 1 055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae 639996 -1 1 > cpu2006docs.tar-1-1.out", "cpu2006docs.tar.xz 1 055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae 637616 -1 2 > cpu2006docs.tar-1-2.out",  "cpu2006docs.tar.xz 1 055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae 628996 -1 3e > cpu2006docs.tar-1-3e.out", "cpu2006docs.tar.xz 1 055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae 631912 -1 4 > cpu2006docs.tar-1-4.out",  "cpu2006docs.tar.xz 1 055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae 629064 -1 4e > cpu2006docs.tar-1-4e.out"]
+        $diff_cmd_list = [ "diff -q cpu2006docs.tar-1-0.out cpu2006docs.tar-1-0.out.ref", "diff -q cpu2006docs.tar-1-1.out cpu2006docs.tar-1-1.out.ref", "diff -q cpu2006docs.tar-1-2.out cpu2006docs.tar-1-2.out.ref", "diff -q cpu2006docs.tar-1-4.out cpu2006docs.tar-1-4.out.ref", "diff -q cpu2006docs.tar-4-0.out cpu2006docs.tar-4-0.out.ref", "diff -q cpu2006docs.tar-4-1.out cpu2006docs.tar-4-1.out.ref", "diff -q cpu2006docs.tar-4-2.out cpu2006docs.tar-4-2.out.ref", "diff -q cpu2006docs.tar-4-4.out cpu2006docs.tar-4-4.out.ref" ]
+    } else {
+        echo "ERROR: not supported workload: " + $spec
+        exit 1
+    }
+} else if $spec_size == "ref" {
+    if $spec == "astar" {
+        $run_args_list = ["BigLakes2048.cfg > BigLakes2048.out"]
+    } else if $spec == "blender17" {
+        $pre_run_fixup = "mv control-ref control"
+        $run_args_list = ["sh3_no_char.blend --render-output sh3_no_char_ --threads 1 -b -F RAWTGA -s 849 -e 849 -a > sh3_no_char.849.spec.out"]
+        $diff_cmd_list = ["diff -q sh3_no_char.849.spec.out sh3_no_char.849.spec.out.ref", "diff -q sh3_no_char_0849.tga sh3_no_char_0849.tga.ref"]
+    } else if $spec == "bzip" {
+        $run_args_list = ["input.source 280", "chicken.jpg 30", "liberty.jpg 30", "input.program 280", "text.html 280", "input.combined 200"]
+    } else if $spec == "dealII" {
+        $run_args_list = ["23"]
+    } else if $spec == "deepsjeng17" {
+        $run_args_list = ["ref.txt > ref.out"]
+        $diff_cmd_list = ["diff -q ref.out ref.out.ref"]
+    } else if $spec == "gcc" {
+        $run_args_list = ["166.in -o 166.s", "200.in -o 200.s", "c-typeck.in -o c-typeck.s", "cp-decl.in -o cp-decl.s", "expr.in -o expr.s", "expr2.in -o expr2.s", "g23.in -o g23.s", "s04.in -o s04.s", "scilab.in -o scilab.s"]
+        $diff_cmd_list = ["diff -q 166.s 166.ref", "diff -q 200.s 200.ref", "diff -q c-typeck.s c-typeck.ref", "diff -q cp-decl.s cp-decl.ref", "diff -q expr.s expr.ref", "diff -q expr2.s expr2.ref", "diff -q g23.s g23.ref", "diff -q s04.s s04.ref", "diff -q scilab.s scilab.ref"] 
+    } else if $spec == "gcc17" {
+        $run_args_list = ["gcc-pp.c -O5 -fipa-pta -o gcc-pp.opts-O5_-fipa-pta.s", "gcc-pp.c -O5 -finline-limit=1000 -fselective-scheduling -fselective-scheduling2 -o gcc-pp.opts-O5_-finline-limit_1000_-fselective-scheduling_-fselective-scheduling2.s", "gcc-pp.c -O5 -finline-limit=24000 -fgcse -fgcse-las -fgcse-lm -fgcse-sm -o gcc-pp.opts-O5_-finline-limit_24000_-fgcse_-fgcse-las_-fgcse-lm_-fgcse-sm.s"]
+        $diff_cmd_list = ["diff -q gcc-pp.opts-O5_-fipa-pta.s gcc-pp.opts-O5_-fipa-pta.s.ref", "diff -q gcc-pp.opts-O5_-finline-limit_1000_-fselective-scheduling_-fselective-scheduling2.s gcc-pp.opts-O5_-finline-limit_1000_-fselective-scheduling_-fselective-scheduling2.s.ref", "diff -q gcc-pp.opts-O5_-finline-limit_24000_-fgcse_-fgcse-las_-fgcse-lm_-fgcse-sm.s gcc-pp.opts-O5_-finline-limit_24000_-fgcse_-fgcse-las_-fgcse-lm_-fgcse-sm.s.ref"]
+    } else if $spec == "gobmk" {
+        $run_args_list = ["--quiet --mode gtp < 13x13.tst > 13x13.out", "--quiet --mode gtp < nngs.tst > nngs.out", "--quiet --mode gtp < score2.tst > score2.out", "--quiet --mode gtp < trevorc.tst > trevorc.out", "--quiet --mode gtp < trevord.tst > trevord.out"]
+    } else if $spec == "h264ref" {
+        $run_args_list = ["-d foreman_ref_encoder_baseline.cfg > foreman_ref_encoder_baseline.log", "-d foreman_ref_encoder_main.cfg > foreman_ref_encoder_main.log", "-d sss_encoder_main.cfg > sss_encoder_main.log"]
+    } else if $spec == "hmmer" {
+        $run_args_list = ["nph3.hmm swiss41 > nph3_cc.out", "--fixed 0 --mean 500 --num 500000 --sd 350 --seed 0 retro.hmm > retro.out", "--fixed 0 --mean 325 --num 45000 --sd 200 --seed 0 bombesin.hmm > bombesin_cc.out"]
+    } else if $spec == "imagick17" {
+        $run_args_list = ["-limit disk 0 refspeed_input.tga -resize 817% -rotate -2.76 -shave 540x375 -alpha remove -auto-level -contrast-stretch 1x1% -colorspace Lab -channel R -equalize +channel -colorspace sRGB -define histogram:unique-colors=false -adaptive-blur 0x5 -despeckle -auto-gamma -adaptive-sharpen 55 -enhance -brightness-contrast 10x10 -resize 30% refspeed_output.tga"]
+        $diff_cmd_list = ["diff --brief refspeed_output.tga refspeed_output.tga.ref"]
+    } else if $spec == "lbm" {
+        $run_args_list = ["3000 reference.dat 0 0 100_100_130_ldc.of > lbm.out"]
+    } else if $spec == "lbm17" {
+        $pre_run_fixup = "cp lbm-ref.in lbm.in"
+        $run_args_list = ["2000 reference.dat 0 0 200_200_260_ldc.of > lbm-ref.out"]
+        $diff_cmd_list = ["diff -q lbm-ref.out lbm-ref.out.ref"]
+    } else if $spec == "leela17" {
+        $run_args_list = ["ref.sgf > ref.out"]
+        $diff_cmd_list = ["diff -q ref.out ref.out.ref"]
+    } else if $spec == "libquantum" {
+        $run_args_list = ["1397 8"]
+    } else if $spec == "mcf" {
+        $run_args_list = ["inp.in > inp.out"]
+    } else if $spec == "mcf17" {
+        $run_args_list = ["inp.in > inp.out"]
+        $diff_cmd_list = ["diff -q inp.out inp.out.ref"]
+    } else if $spec == "milc" {
+        $run_args_list = ["< su3imp.in > output.txt"]
+    } else if $spec == "nab17" {
+        $run_args_list = ["3j1n 20140317 220 > 3j1n.out"]
+        $diff_cmd_list = ["diff -q 3j1n.out 3j1n.out.ref"]
+    } else if $spec == "namd" {
+        $run_args_list = ["--input namd.input --iterations 38 --output namd.out"]
+    } else if $spec == "namd17" {
+        $run_args_list = ["--input apoa1.input --output apoa1.ref.output --iterations 65 > namd_ref.out"]
+        $diff_cmd_list = ["diff -q apoa1.ref.output apoa1.ref.output.ref", "diff -q namd_ref.out namd_ref.out.ref"]
+    } else if $spec == "omnetpp" {
+        $run_args_list = ["omnetpp.ini > omnetpp.log"]
+    } else if $spec == "omnetpp17" {
+        $run_args_list = ["-c General -r 0 > omnetpp.out"]
+        $diff_cmd_list = ["diff -q omnetpp.out omnetpp.out.ref"]
+    } else if $spec == "parest17" {
+        $run_args_list = ["ref.prm > ref.out"]
+        $diff_cmd_list = ["diff -q ref.out ref.out.ref"]
+    } else if $spec == "perlbench" {
+        $run_args_list = ["-I./lib checkspam.pl 2500 5 25 11 150 1 1 1 1", "-I./lib diffmail.pl 4 800 10 17 19 300", "-I./lib splitmail.pl 1600 12 26 16 4500"]
+    } else if $spec == "perlbench17" {
+        $run_args_list = ["-I./lib checkspam.pl 2500 5 25 11 150 1 1 1 1 > checkspam.2500.5.25.11.150.1.1.1.1.out", "-I./lib diffmail.pl 4 800 10 17 19 300 > diffmail.4.800.10.17.19.300.out", "-I./lib splitmail.pl 6400 12 26 16 100 0 > splitmail.6400.12.26.16.100.0.out"]
+        $diff_cmd_list = ["diff -q checkspam.2500.5.25.11.150.1.1.1.1.out checkspam.2500.5.25.11.150.1.1.1.1.out.ref", "diff -q diffmail.4.800.10.17.19.300.out diffmail.4.800.10.17.19.300.out.ref", "diff -q splitmail.6400.12.26.16.100.0.out splitmail.6400.12.26.16.100.0.out.ref"]
+    } else if $spec == "povray" {
+        $run_args_list = ["SPEC-benchmark-ref.ini > SPEC-benchmark.log"]
+    } else if $spec == "povray17" {
+        $run_args_list = ["SPEC-benchmark-ref.ini > SPEC-benchmark-ref.stdout"]
+        $diff_cmd_list = ["diff -q SPEC-benchmark.tga SPEC-benchmark-ref.tga.ref"]
+    } else if $spec == "sjeng" {
+        $run_args_list = ["ref.txt > ref.out"]
+    } else if $spec == "soplex" {
+        $run_args_list = ["-s1 -e -m45000 pds-50.mps > prs-50.mps.out", "-m3500 ref.mps > ref.out"]
+    } else if $spec == "sphinx" {
+        $pre_run_fixup = "cp COPY_FOR_REF/* ./ && for f in *.le.raw; do cp -- $f ${f%.le.raw}.raw; done"
+        $run_args_list = ["ctlfile . args.an4 2>&1 > an4.log"]
+    } else if $spec == "x264_17" {
+        $run_args_list = ["--dumpyuv 50 --frames 156 -o BuckBunny_New.264 BuckBunny.yuv 1280x720 > test.out"]
+        $diff_cmd_list = ["diff -q BuckBunny_New.264 BuckBunny_New.264.ref"]
+    } else if $spec == "xalancbmk" {
+        $run_args_list = ["-v t5.xml xalanc.xsl > ref.out"]
+    } else if $spec == "xalancbmk17" {
+        $run_args_list = ["-v t5.xml xalanc.xsl > ref-t5.out"]
+        $diff_cmd_list = ["diff -q ref-t5.out ref-t5.out.ref"]
+    } else if $spec == "xz17" {
+        $run_args_list = ["cpu2006docs.tar.xz 6643 055ce243071129412e9dd0b3b69a21654033a9b723d874b2015c774fac1553d9713be561ca86f74e4f16f22e664fc17a79f30caa5ad2c04fbc447549c2810fae 1036078272 1111795472 4 > cpu2006docs.tar-6643-4.out", "cld.tar.xz 1400 19cf30ae51eddcbefda78dd06014b4b96281456e078ca7c13e1c0c9e6aaea8dff3efb4ad6b0456697718cede6bd5454852652806a657bb56e07d61128434b474 536995164 539938872 8 > cld.tar-1400-8.out"]
+        $diff_cmd_list = ["diff -q cpu2006docs.tar-6643-4.out cpu2006docs.tar-6643-4.out.ref", "diff -q cld.tar-1400-8.out cld.tar-1400-8.out.ref"]
+    } else {
+        echo "ERROR: not supported workload: " + $spec
+        exit
+    }
+} else {
+    echo "Unsupported spec size: " + $spec_size
+    exit 1
+}
+
+$workload_name = $spec 
+if not defined cache_stat_file {
+    !mkdir -p cache_stats
+    $cache_stat_file = "cache_stats/" + $spec +"_" + $prefix + ".log"
+}
+
+$run_cmd = "./" + $spec + " " + $run_args_list[0] + " 2> stderr.out"
+foreach $i in (range 1 (list-length $run_args_list)) {
+    $run_cmd = $run_cmd + " && " + $env_vars +" ./" + $spec + " " + $run_args_list[$i] + " 2>> stderr.out"
+}
+
+if defined diff_cmd_list {
+    if not defined post_run_cmd {
+        $post_run_cmd = $diff_cmd_list[0]
+        foreach $i in (range 1 (list-length $diff_cmd_list)) {
+            $post_run_cmd = $post_run_cmd + " && " + $diff_cmd_list[$i]
+        }
+        $post_run_cmd = $post_run_cmd + " && diff -q stderr.out stderr.out." + $spec_size
+        #" && if [ -s stderr.out ]; then echo 'stderr not empty' >&2; return -1 ; else echo 'Done! Workload completed correctly!'; fi"
+    }
+}
+
+$src_file = $workload_name + "_" + $prefix + ".tar"
+$src_path  = "temp/"
+
+$workload_folder = "internal/spec/" + $workload_name
+$bin_path = "/home/simics/" + $workload_folder + "/run"
+$unpack_cmd = "tar -xf /home/simics/" + $src_file + " -C ~"
+$compile_cmd = "cd ~/internal/spec/" + $workload_name + "/src && chmod u+x make.sh && ./make.sh"
+$copy_binary_cmd = "cp " + $workload_name + " ../run && cd ../run && chmod u+x " + $workload_name  
+if defined rebuild {
+    $build_cmd = $unpack_cmd + " && " + $compile_cmd + " && " + $copy_binary_cmd
+} else {
+    $build_cmd = $unpack_cmd + " && cd ~/internal/spec/" + $workload_name + "/run && chmod u+x " + $workload_name
+}
+!mkdir -p temp
+$arc_dirs = $workload_folder + "/run"
+if defined rebuild {
+    $arc_dirs += " " + $workload_folder + "/build"
+}
+@cmd_to_shell("tar -chzf temp/" + simenv.src_file + " " + simenv.arc_dirs)
+
+run-command-file (lookup-file "%simics%/scripts/runworkload_common.simics")

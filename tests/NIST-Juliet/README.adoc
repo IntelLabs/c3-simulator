@@ -1,0 +1,101 @@
+= Juliet test support
+:source-highlighter: pygments
+:source-language: make
+
+This directory contains scripts to assist with running NIST Juliet tests on
+the Cryptographic Computing models. To use these scripts, please first
+unpack NIST Juliet from the following link into this directory:
+https://samate.nist.gov/SRD/testsuites/juliet/Juliet_Test_Suite_v1.3_for_C_Cpp.zip
+
+== Running Juliet using automation scripts
+. Build all of the Juliet workloads you require outside of Simics
+.. Edit the Makefiles to build separate "good" and "bad" binaries. 
+... For example: For ``NIST-Juliet/testcases/CWE122_Heap_Based_Buffer_Overflow/s01``, make the following changes in the Makefile. 
++
+[source]
+----
+$(INDIVIDUALS_C): $(C_SUPPORT_OBJECTS)
+    $(CC) $(INCLUDES) $(INCLUDE_MAIN) -DOMITBAD -o $@ $(wildcard $(subst .out,,$@)*.c) $(C_SUPPORT_OBJECTS) $(LFLAGS)
+    $(CC) $(INCLUDES) $(INCLUDE_MAIN) -DOMITGOOD -o $@.bad $(wildcard $(subst .out,,$@)*.c) $(C_SUPPORT_OBJECTS) $(LFLAGS)
+$(INDIVIDUALS_CPP): $(C_SUPPORT_OBJECTS)
+    $(CPP) $(INCLUDES) $(INCLUDE_MAIN) -DOMITBAD -o $@ $(wildcard $(subst .out,,$@)*.cpp) $(C_SUPPORT_OBJECTS) $(LFLAGS)
+    $(CPP) $(INCLUDES) $(INCLUDE_MAIN) -DOMITGOOD -o $@.bad $(wildcard $(subst .out,,$@)*.cpp) $(C_SUPPORT_OBJECTS) $(LFLAGS)
+----
+... This will create two binaries per test case: `\*.out` and `*.out.bad`. `\*.out` should not exhibit any memory safety violations, whereas `*.out.bad` may exhibit memory safety violations.
+... This step can be repeated in each section folder (s01, s02, etc.)
+.. `$ make individuals`
+... This step can be repeated in each section folder (s01, s02, etc.)
+. Adjust parameters in the ``NIST-Juliet\scripts\cc_nistjuliet_auto.py``
+.. This script is run inside Simics
+.. ~ Line 96, pick the correct environment variables to pass to your workload
++
+----
+baselinegoodoutput = cleanup_results(runbinary(binary, os.environ))
+baselinebadoutput =  cleanup_results(runbinary(binary + ".bad", os.environ))
+ccgoodoutput = cleanup_results(runbinary(binary + "_glibc_230", dict(os.environ, LIM_ENABLED="1")))
+ccbadoutput = cleanup_results(runbinary(binary + ".bad_glibc_230",  dict(os.environ, LIM_ENABLED="1")))
+----
+.. ~Line 122, See the option to run limited/specific binaries.
++
+----
+binariesToRun = enumerateCweBinaries()
+#Uncomment to run a single binary:
+#binariesToRun = ["s05/CWE122_Heap_Based_Buffer_Overflow__CWE131_loop_01.out"]
+----
+. Adjust ``NIST-Juliet\scripts\pyscripts.py`` if needed.
++
+----
+# ~Line 4 choose which checkpoint to use
+# config = getCkpt()
+# run_command("read-configuration " + config)
+run_command("read-configuration /<path>/<checkpoint>.ckpt")
+
+# ~Line 33 choose which folder to use. Adjust the updir-depth to scripts/cc_nistjuliet_auto.py if required
+command_to_console("cd ~/NIST-Juliet/testcases/CWE122_Heap_Based_Buffer_Overflow")
+command_to_console("./../../scripts/cc_nistjuliet_auto.py patchelf") 
+
+# ~Line 38 Adjust which model to load
+run_command("new-lim-model -connect-all") 
+
+# ~Line 39 Adjust the updir-depth to scripts/cc_nistjuliet_auto.py if required
+command_to_console("./../../scripts/cc_nistjuliet_auto.py runCweBinaries")
+
+# ~Line 42 Mirror changes on line ~33
+run_command("matic0.download /home/simics/NIST-Juliet/testcases/CWE122_Heap_Based_Buffer_Overflow/cc_auto_results.csv cc_auto_results_" + str(datetime.now().strftime("%H:%M:%S")) + ".csv")
+----
+. Run scripts from simics
+.. ./simics NIST-Juliet/scripts/nist-juliet.simics
+
+. CSV results will be automatically downloaded from environment inside Simics to in the project root directory.
+
+== Running workloads manually
+. Follow step 1 above
+. Use the runworkload_common script
+.. For example: 
++
+$ ./simics scripts/runworkload_common.simics checkpoint=temp/chkpt-apr7-2021-catch-1b-ovf model=lim env_vars="LIM_ENABLED=1" workload_name=CWE122_Heap_Based_Buffer_Overflow__c_CWE193_char_cpy_11.out.bad src_path=tests/NIST-Juliet/testcases/CWE122_Heap_Based_Buffer_Overflow/s06 src_file=CWE122_Heap_Based_Buffer_Overflow__c_CWE193_char_cpy_11.out.bad build_cmd="echo uploaded binary"
+. OR Extra manual mode
+..
+---- 
+./simics
+# In simics console
+run-python-file scripts/init.py
+read-configuration /<path>/<checkpoint>.ckpt
+run
+start-agent-manager
+agent_manager.connect-to-agent
+upload_tarball("NIST-Juliet/")
+
+# In serial console
+ln -s /usr/lib64/libstdc++.so.6 /home/simics/glibc/glibc-2.30_install/lib
+ln -s /usr/lib64/libgcc_s.so.1 /home/simics/glibc/glibc-2.30_install/lib
+cd NIST-Juliet/testcases/CWE122_Heap_Based_Buffer_Overflow/s05/
+cp CWE122_Heap_Based_Buffer_Overflow__CWE131_loop_01.out CWE122_Heap_Based_Buffer_Overflow__CWE131_loop_01.out.bak
+patchelf --set-interpreter /home/simics/glibc/glibc-2.30_install/lib/ld-2.30.so --set-rpath /home/simics/glibc/glibc-2.30_install/lib CWE122_Heap_Based_Buffer_Overflow__CWE131_loop_01.out
+
+# In simics console
+new-lim-model -connect-all
+
+# In serial console
+LIM_ENABLED="1" ./CWE122_Heap_Based_Buffer_Overflow__CWE131_loop_01.out
+----

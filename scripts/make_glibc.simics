@@ -1,0 +1,96 @@
+# Set glibc_build_script to change the script that is used:
+$defl_glibc_build_script = "make_glibc.sh"
+if not defined glibc_build_script { $glibc_build_script = $defl_glibc_build_script }
+
+#load-persistent-state "gcc_installed.craff"
+# set up variables, since the checkpoint does not preserve them
+if not defined system { $system = "board" }
+if not defined buildmode { $buildmode = "undefined" }
+
+# Pick up the name of the serial console
+if defined checkpoint { 
+	read-configuration $checkpoint
+} else {
+	run-command-file targets/qsp-x86/qsp-clear-linux.simics
+}
+
+# Pick up the name of the serial console
+$con = $system.serconsole.con
+$cpu = $system.mb.cpu0.core[0][0]
+
+#hide graphic console
+$system.console.con.hide
+
+#init script to define Python helper functions
+run-python-file scripts/init.py
+
+script-branch "glibc" {
+		# Send in a newline to trigger a prompt if loaded an existing checkpoint
+		if defined checkpoint { $con.input "\n" }
+		$con.wait-then-write "$ " "# Uploading and building glibc. \n"
+		$cpu.wait-for-time 0.1 -relative
+#     Upload Source files     #
+###############################
+#$con.input "simics-agent \n"
+#$cpu.wait-for-time 0.1 -relative
+		start-agent-manager
+		agent_manager.connect-to-agent
+		@command_to_console("cd ~")
+		
+		$cpu.wait-for-time 1 -relative
+		
+		if $buildmode == "upload" {
+		    @upload_tarball("glibc/glibc-2.30_install")
+		}else{
+		    @upload_tarball("glibc/glibc-2.30")
+		}
+		# even non-default build scripts invoke the default after setting env vars:
+		matic0.upload ("glibc/" + $defl_glibc_build_script) "/home/simics/glibc"
+		# this is redundant if the default script is selected, but it introduces minimal delay:
+		matic0.upload ("glibc/" + $glibc_build_script) "/home/simics/glibc"
+		matic0.upload "patchelf-0.10.tar.gz" "/home/simics"
+		matic0.wait-for-job
+		
+###############################
+#     Compile & run           #
+###############################
+		
+		@command_to_console("unset CFLAGS")
+		@sychronizeGuestDate()
+		if $buildmode != "upload" {
+		    @command_to_console("sudo swupd bundle-add dev-utils-dev")
+		}
+		@command_to_console("sudo swupd bundle-add gdb c-basic devpkg-googletest")
+		@command_to_console("cd ~")
+		disable-real-time-mode
+		@command_to_console("tar -xf patchelf-0.10.tar.gz && cd patchelf-0.10")
+		@command_to_console("./bootstrap.sh && ./configure && make && sudo make install")
+		if $buildmode != "upload" {
+		  @command_to_console("cd ~/glibc")
+		  @command_to_console("./" + simenv.glibc_build_script) # Allow about 15 minutes to complete
+		}
+		@command_to_console("echo 0 | sudo tee /proc/sys/kernel/randomize_va_space")
+		@command_to_console("sync && sync -f")
+		@command_to_console("alias ll='ls -lh --color=auto'")
+
+        # Symlinks for commonly needed libraries
+        @command_to_console("ln -nsf /usr/lib64/libgtest.so.0 /home/simics/glibc/glibc-2.30_install/lib")
+        @command_to_console("ln -nsf /usr/lib64/libgomp.so.1 /home/simics/glibc/glibc-2.30_install/lib")
+        @command_to_console("cd ~")	
+		$cpu.wait-for-time 1 -relative
+		stop
+		#once completed, save checkpoint
+		if defined save_checkpoint {
+			@cmd_to_shell("rm -rf " + simenv.save_checkpoint)
+			echo "Saving checkpoint to " + $save_checkpoint + " ... This may take a while..."
+			sim->hide_console_windows = FALSE
+			$con.show
+			write-configuration $save_checkpoint
+			echo "done"
+		} else {
+			echo "No save_checkpoint defined. You can save a checkpoint manually with 'write-configuration <checkpoint_name>.ckpt"
+		}
+#################################
+}
+enable-real-time-mode
+run
