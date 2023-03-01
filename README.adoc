@@ -1,4 +1,4 @@
-= Cryptographic Computing model for Simics
+= Cryptographic Capability Computing(C3) Simulator
 :source-highlighter: pygments
 :source-language: bash
 
@@ -7,6 +7,7 @@
 :simics-pkg-ver: 2021.24
 :simics-pkg-ver-stem: simics-6-packages-2021-24-linux64
 :simics-repo-url: https://github.com/IntelLabs/cc-simulator
+
 
 WARNING: The contents of this repository and linked repositories are solely for
 research purposes and may contain software with vulnerabilities, such as
@@ -189,7 +190,7 @@ Common options:
 				Can specify multiple by appending '--model <model_name>' for each model
 		
 
-> Reviewed, 12/16/2022 michaelbeale-il
+
 
 
 
