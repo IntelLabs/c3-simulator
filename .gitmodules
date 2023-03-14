@@ -1,0 +1,9 @@
+[submodule "glibc/src"]
+	path = glibc/src
+	url = https://github.com/IntelLabs/c3-glibc.git
+[submodule "llvm/src"]
+	path = llvm/src
+	url = https://github.com/IntelLabs/c3-llvm.git
+[submodule "linux/src"]
+	path = linux/src
+	url = https://github.com/IntelLabs/c3-linux.git

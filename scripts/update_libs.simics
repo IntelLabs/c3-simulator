@@ -1,0 +1,211 @@
+decl {
+	! Update the custom glibc and/or LLVM libs on the guest, either by Uploading
+	! pre-built installation directories or by uploading the source and building
+	! within the Simics guest.
+
+	param checkpoint : string = ""
+	param save_checkpoint : string = ""
+
+	param buildmode : string = "upload"
+	! Set to 'upload' in order to just upload pre-built libraries from their
+	! respective directoreis, or to 'build', to upload sources instead and do
+	! the build too within the guest.
+
+	param do_llvm : bool = TRUE
+	! Shoudl be upload/build LLVM?
+
+	param do_glibc : bool = TRUE
+	! Shoudl be upload/build glibc?
+
+	param llvm_buildmode : string = "upload"
+	param llvm_src : string = "llvm/src"
+	param llvm_install : string = "llvm/llvm_install"
+	param llvm_dest_dir : string = "/home/simics/llvm"
+	param llvm_build_script : string = "make_llvm.sh"
+
+	param glibc_buildmode : string = "upload"
+	param glibc_src : string = "glibc/src"
+	param glibc_install : string = "glibc/glibc-2.30_install"
+	param glibc_dest_dir : string = "/home/simics/glibc"
+	param glibc_build_script : string = "make_glibc.sh"
+
+	param malloc_src : string = "malloc"
+	! Where to find C3 malloc sources, needed for glibc build.
+
+	param build_env : string = ""
+	! Additional environmental variables to be set when running the build
+	! scripts within the guest.
+
+	param do_exit : bool = FALSE
+	param system : string = board
+}
+
+if $checkpoint != "" {
+	read-configuration $checkpoint
+} else {
+	$memory_megs=32768
+	run-command-file targets/qsp-x86/qsp-clear-linux.simics
+}
+
+if $buildmode != "build" and $buildmode != "upload" {
+	echo "UNRECOGNIZED buildmode: %s" % [$buildmode]
+	exit
+} else {
+	if $buildmode == "build" {
+		$llvm_buildmode = "build"
+		$glibc_buildmode = "build"
+	}
+}
+
+# Pick up the name of the serial console, then hide graphic console
+$con = $system.serconsole.con
+$cpu = $system.mb.cpu0.core[0][0]
+# Hide graphical console
+$system.console.con.hide
+
+#init script to define Python helper functions
+run-python-file scripts/init.py
+
+# Start the agent manager
+start-agent-manager
+$matic = (agent_manager.connect-to-agent)
+
+echo "checkpoint: %s" % [$checkpoint]
+echo "save_checkpoint: %s" % [$save_checkpoint]
+echo "do_llvm: %s" % [$do_llvm]
+echo "do_glibc: %s" % [$do_glibc]
+echo "buildmode: %s" % [$buildmode]
+echo "llvm_buildmode: %s" % [$llvm_buildmode]
+echo "glibc_buildmode: %s" % [$glibc_buildmode]
+echo "build_env: %s" % [$build_env]
+
+$save_checkpoint_dirname = (shell("dirname %s" % [$save_checkpoint]))
+echo "Going to create %s" % [$save_checkpoint_dirname]
+shell("mkdir -p %s" % [$save_checkpoint_dirname])
+
+script-branch "upload_and_build" {
+	# Send in a newline to trigger a prompt if loaded an existing checkpoint
+	if defined checkpoint { $con.input "\n" }
+	$cpu.wait-for-time 0.1 -relative
+	@command_to_console("cd ~")
+
+	# Check if we're on ubuntu
+	$is_ubuntu = FALSE
+	@simenv.is_ubuntu = is_ubuntu()
+	echo "is_ubuntu: %s" % [$is_ubuntu]
+
+	$cpu.wait-for-time 1 -relative
+	@sychronizeGuestDate()
+
+	################################################
+	#     Upload install or source files files     #
+	################################################
+
+	# Upload installs or source files
+	if $do_glibc {
+		@command_to_console("rm -rf temp.tar {}".format(simenv.glibc_dest_dir))
+		@command_to_console("mkdir {}".format(simenv.glibc_dest_dir))
+		if $glibc_buildmode == "upload" {
+			echo "Uploading glibc"
+			@upload_tarball(simenv.glibc_install)
+			@command_to_console("rm -f temp.tar")
+		} else {
+			echo "Uploading glibc source"
+			@upload_tarball(simenv.glibc_src)
+			@command_to_console("rm -f temp.tar")
+			@upload_tarball(simenv.malloc_src)
+			@command_to_console("rm -f temp.tar")
+			matic0.upload ("glibc/" + $glibc_build_script) $glibc_dest_dir
+		}
+		matic0.upload "patchelf-0.10.tar.gz" "/home/simics"
+		matic0.wait-for-job
+	}
+	if $do_llvm {
+		@command_to_console("rm -rf " + simenv.llvm_dest_dir)
+		@command_to_console("mkdir " + simenv.llvm_dest_dir)
+		if $llvm_buildmode == "upload" {
+			echo "Uploading LLVM"
+			@upload_tarball(simenv.llvm_install)
+			@command_to_console("rm -f temp.tar")
+		} else {
+			echo "Uploading LLVM source"
+			@upload_tarball(simenv.llvm_src)
+			@command_to_console("rm -f temp.tar")
+			matic0.upload ("llvm/" + $llvm_build_script) $glibc_dest_dir
+			matic0.wait-for-job
+		}
+	}
+
+	#####################################
+	#     Setup, configure, or buid     #
+	#####################################
+
+	@command_to_console("unset CFLAGS")
+	@sychronizeGuestDate()
+
+	if $is_ubuntu {
+		@command_to_console("sudo apt -y install gawk bison python3 gcc-8 g++-8 build-essential")
+	} else {
+		@command_to_console("sudo swupd bundle-add gdb c-basic devpkg-googletest dev-utils")
+	}
+	@command_to_console("cd ~")
+
+	if $do_glibc {
+		@command_to_console("sudo chown simics:simics -R " + simenv.glibc_dest_dir)
+		@command_to_console("tar -xf patchelf-0.10.tar.gz && cd patchelf-0.10")
+		@command_to_console("./bootstrap.sh && ./configure && make && sudo make install")
+
+		if $glibc_buildmode != "upload" {
+			@command_to_console("cd ~/glibc")
+			# Allow about 15 minutes to complete
+			@command_to_console("{} ./{}".format(simenv.build_env, simenv.glibc_build_script))
+		}
+
+		# Symlinks for commonly needed libraries
+		@command_to_console("ln -nsf /usr/lib64/libgtest.so.0 /home/simics/glibc/glibc-2.30_install/lib")
+		@command_to_console("ln -nsf /usr/lib64/libgomp.so.1 /home/simics/glibc/glibc-2.30_install/lib")
+		@command_to_console("cd ~")
+	}
+
+	if $do_llvm {
+		@command_to_console("sudo chown simics:simics -R " + simenv.llvm_dest_dir)
+		if $llvm_buildmode != "upload" {
+			@command_to_console("cd ~/llvm")
+			@command_to_console("{} ./{}".format(simenv.build_env, simenv.llvm_build_script))
+		}
+	}
+
+	@command_to_console("echo 0 | sudo tee /proc/sys/kernel/randomize_va_space")
+	@command_to_console("sync && sync -f")
+	@command_to_console("alias ll='ls -lh --color=auto'")
+
+	$cpu.wait-for-time 1 -relative
+	stop
+	$matic.delete-handle
+
+	# Once completed, save checkpoint
+	if save_checkpoint != "" {
+		@cmd_to_shell("rm -rf " + simenv.save_checkpoint)
+		# Make sure we have the parent directory with -p
+		@cmd_to_shell("mkdir -p " + simenv.save_checkpoint)
+		# But delete the checkpoint directory (but not full path, i.e., no -p)
+		@cmd_to_shell("rmdir " + simenv.save_checkpoint)
+		echo "Saving checkpoint to " + $save_checkpoint + " ... This may take a while..."
+		sim->hide_console_windows = FALSE
+		$con.show
+		write-configuration $save_checkpoint
+		echo "done"
+	} else {
+		echo ""
+		echo "No save_checkpoint defined."
+		echo ""
+		echo "You can save a checkpoint with 'write-configuration <checkpoint_name>.ckpt'"
+	}
+
+	if $do_exit {
+		exit
+	}
+}
+
+enable-real-time-mode
+run

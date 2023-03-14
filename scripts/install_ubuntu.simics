@@ -1,0 +1,258 @@
+decl {
+    ! Script to automate Ubuntu installation from scratch, using the legacy
+    ! netboot mini iso for Ubuntu 20.04. The iso file is expected to be in the
+    ! current folder as ubuntu.iso (override with iso_image parameter). Default
+    ! username and password is simics:simics, configure to override.
+    !
+    ! NOTE: This is somewhat unstable and is not guaranteed to work!
+
+    param iso_image : string = "ubuntu.iso"
+    ! Filename for ISO image to map as installation media. This is expected to
+    ! be a Ubuntu 20.04 legacy netboot image as the automation will follow it.
+
+    param iso_image_sha : string = "0e79e00bf844929d40825b1f0e8634415cda195ba23bae0b041911fde4dfe018"
+    ! Checksum of ISO image this script was created for.
+
+    param iso_image_url : string = "http://archive.ubuntu.com/ubuntu/dists/focal/main/installer-amd64/current/legacy-images/netboot/mini.iso"
+    ! URL for trying to fetch ISO image if not present
+
+    param console_output : bool = TRUE
+    param system : string = "board"
+
+    param guest_hostname : string = "board"
+    ! Hostname to configur eduring install.
+
+    param guest_username : string = "simics"
+    ! Main user username.
+
+    param guest_password : string = "simics"
+    ! Main user password.
+
+    param bpimage_grub : string = "%simics%/scripts/breakpoint_images/ubuntu.mini.grub.brk"
+    ! Simics breakpoint image to detect the inital GRUB boot screen. If this
+    ! needs to be changed down the line, you can use the graphical Simics VGA
+    ! window to capture a breakpoint image from the window menu.
+
+    param apt_packages : string = "autoconf cmake ninja-build build-essential patchelf libgtest-dev"
+    ! Packages to install on the system on first boot. These are not needed for
+    ! the script as such, but can be used to install packages that will need to
+    ! be installed down the line anyway.
+}
+
+$memory_megs = 8192
+$rtc_time=(date format="%Y-%m-%d %H:%M:%S")
+$disk0_image=NIL
+$disk0_size=(1024*1024*1024)
+
+run-command-file "targets/qsp-x86/qsp-clear-linux.simics"
+
+if (shell("test -e %s && echo -n 1 || echo -n 0" % [$iso_image])) != "1" {
+    echo "Trying to download Ubuntu ISO iamge from %s" % [$iso_image_url]
+    shell("curl -o %s %s" % [$iso_image, $iso_image_url])
+}
+if (shell("sha256sum %s | awk  '{print $1;}'" % [$iso_image])) != $iso_image_sha {
+    echo "Failed to verify SHA256 of ubuntu.iso"
+    exit
+}
+
+echo "Setting up bootmedia from %s" % [$iso_image]
+$bootmedia = (new-cdrom-image file=$iso_image)
+board.cdrom.cd.insert -dvd media=$bootmedia
+
+echo "Connecting agent disk image"
+$agent_disk_image = (lookup-file "%simics%/targets/common/images/simics_agent_binaries.img")
+echo "  Found agent at %s" % [$agent_disk_image]
+$agent_disk = (new-usb-disk-from-image $agent_disk_image)
+$agent_disk.connect-to board
+
+$cpu        = $system.mb.cpu0.core[0][0]
+$graphcon   = $system.console.con
+$sercon     = $system.serconsole.con
+$cdrom      = $system.cdrom
+
+if not $console_output {
+	$system.console.con.hide
+	$con.disable-cmd-line-output
+}
+
+echo "bootmedia: %s" % [$bootmedia]
+echo "agent_disk: %s" % [$agent_disk]
+
+$branch_id = (script-branch "install" {
+    disable-real-time-mode
+    run
+
+    local $bp_grub = (lookup-file $bpimage_grub)
+
+    echo "Waiting for grub (breakpoint image: %s)" % [$bp_grub]
+    bp.gfx.wait-for $graphcon $bp_grub 1
+    bp.time.wait-for $cpu 0.1
+    $graphcon.input -e "Down"; bp.time.wait-for $cpu 2
+    $graphcon.input e; bp.time.wait-for $cpu 2
+    $graphcon.input -e "Down"; bp.time.wait-for $cpu 2
+    $graphcon.input -e "Down"; bp.time.wait-for $cpu 2
+    $graphcon.input -e "Down"; bp.time.wait-for $cpu 2
+    $graphcon.input -e "C-e"; bp.time.wait-for $cpu 2
+    $graphcon.input "console=tty1 console=ttyS0,115200"; bp.time.wait-for $cpu 2
+    $graphcon.input -e "C-x"; bp.time.wait-for $cpu 2
+
+    echo "Configuring language, keyboard"
+    $sercon.bp-wait-for-console-string "Select a language"
+    bp.time.wait-for $cpu 1
+    $sercon.input -e "Enter"
+    $sercon.bp-wait-for-console-string "Country, territory or area:"
+    bp.time.wait-for $cpu 1
+    $sercon.input -e "Enter"
+    $sercon.bp-wait-for-console-string "Detect keyboard layout"
+    bp.time.wait-for $cpu 1
+    $sercon.input -e "Enter"
+    $sercon.bp-wait-for-console-string "Country of origin for the keyboard"
+    bp.time.wait-for $cpu 1
+    $sercon.input -e "Enter"
+    $sercon.bp-wait-for-console-string "Keyboard layout"
+    bp.time.wait-for $cpu 1
+    $sercon.input -e "Enter"
+
+    echo "Waiting to configure hostname and apt"
+    $sercon.bp-wait-for-console-string "Hostname"
+    bp.time.wait-for $cpu 1
+    $sercon.input -e "Enter"
+    echo "Hostname set to default (board)"
+
+    enable-real-time-mode
+    $sercon.bp-wait-for-console-string "Ubuntu archive mirror country"
+    bp.time.wait-for $cpu 1
+    $sercon.input -e "Enter"
+    $sercon.bp-wait-for-console-string "Ubuntu archive mirror"
+    bp.time.wait-for $cpu 1
+    $sercon.input -e "Enter"
+    echo "Using US Ubuntu mirrors"
+
+    $sercon.bp-wait-for-console-string "proxy information"
+    bp.time.wait-for $cpu 1
+    $sercon.input "http://proxy-us.intel.com:911\n"
+    echo "Using Intel proxy"
+
+    echo "Waiting to set username"
+    $sercon.bp-wait-for-console-string "Full name"
+    bp.time.wait-for $cpu 1
+    $sercon.input "%s" % [$guest_username]
+    $sercon.input -e "Enter"
+    $sercon.bp-wait-for-console-string "Username"
+    bp.time.wait-for $cpu 1
+    $sercon.input -e "Enter"
+    echo "Username set to: %s" % [$guest_username]
+
+    echo "Waiting to set password"
+    $sercon.bp-wait-for-console-string "Choose a password"
+    bp.time.wait-for $cpu 1
+    $sercon.input "%s" % [$guest_password]
+    $sercon.input -e "Enter"
+    $sercon.bp-wait-for-console-string "Re-enter"
+    bp.time.wait-for $cpu 1
+    $sercon.input "%s" % [$guest_password]
+    $sercon.input -e "Enter"
+    $sercon.bp-wait-for-console-string "Use weak password"
+    bp.time.wait-for $cpu 1
+    $sercon.input -e "Left"
+    bp.time.wait-for $cpu 1
+    $sercon.input -e "Enter"
+    echo "Password set to: %s" % [$guest_password]
+
+    echo "Waiting to configure time zone"
+    $sercon.bp-wait-for-console-string "Select your time zone"
+    bp.time.wait-for $cpu 1
+    $sercon.input -e "Enter"
+
+    echo "Waiting to configure partitions"
+    $sercon.bp-wait-for-console-string "Partitioning method"
+    bp.time.wait-for $cpu 1
+    $sercon.input -e "Down"
+    bp.time.wait-for $cpu 1
+    $sercon.input -e "Enter"
+    $sercon.bp-wait-for-console-string "Select disk to partition"
+    bp.time.wait-for $cpu 1
+    $sercon.input -e "Down"
+    bp.time.wait-for $cpu 1
+    $sercon.input -e "Enter"
+    $sercon.bp-wait-for-console-string "Write the changes"
+    bp.time.wait-for $cpu 1
+    $sercon.input -e "Left"
+    bp.time.wait-for $cpu 1
+    $sercon.input -e "Enter"
+
+    # Happens perhaps only after initial failure?
+    # $sercon.bp-wait-for-console-string "Kernel to install"
+    # bp.time.wait-for $cpu 1
+    # $sercon.input -e "Enter"
+    # $sercon.bp-wait-for-console-string "Drivers to include"
+    # bp.time.wait-for $cpu 1
+    # $sercon.input -e "Down"
+    # $sercon.input -e "Enter"
+
+    echo "Waiting to configure updates"
+    $sercon.bp-wait-for-console-string "manage upgrades"
+    bp.time.wait-for $cpu 1
+    $sercon.input -e "Enter"
+    echo "Set to no automatic updates"
+
+    echo "Waiting to configure system clock"
+    $sercon.bp-wait-for-console-string "system clock"
+    bp.time.wait-for $cpu 1
+    $sercon.input -e "Enter"
+    echo "Set to clock in UTC"
+
+    echo "Waiting to complete installation"
+    $sercon.bp-wait-for-console-string "Installation complete"
+    bp.time.wait-for $cpu 1
+    enable-real-time-mode
+    # NOTE: not sure why this is needed
+    $cdrom.cd->locked=0
+    $cdrom.cd.eject
+    bp.time.wait-for $cpu 5
+    $sercon.input -e "Enter"
+    echo "CD-ROM ejected, continuing to reboot"
+
+    echo "Waiting for first boot"
+	$sercon.bp-wait-for-console-string -regexp ".*%s.*login:" % [$guest_hostname]
+    $sercon.input "%s\n" % [$guest_username]
+    $sercon.bp-wait-for-console-string "Password:"
+    $sercon.input "%s\n" % [$guest_password]
+
+    echo "Waiting sudoers"
+    $sercon.bp-wait-for-console-string "$ "
+    $sercon.input "EDITOR=vi sudo -E visudo\n"; bp.time.wait-for $cpu 1
+    $sercon.input "%s\n" % [$guest_password]
+    $sercon.bp-wait-for-console-string "#"; bp.time.wait-for $cpu 1
+    $sercon.input "/%sudo\n$biNOPASSWD: "
+    $sercon.input -e "Esc"
+    $sercon.input ":wq\n"
+    $sercon.bp-wait-for-console-string "$ "
+    echo "Set sudoers to NOPASSWORD"
+
+    echo "Running apt update + upgrade"
+    $sercon.input "sudo apt update\n"
+    $sercon.bp-wait-for-console-string "$ "
+    $sercon.input "sudo apt -y upgrade\n"
+    $sercon.bp-wait-for-console-string "$ "
+    $sercon.input "sudo apt -y install %s\n" % [$apt_packages]
+    $sercon.bp-wait-for-console-string "$ "
+
+    echo "Install simics agent in guest"
+    $sercon.input "sudo mount /dev/sdb1 /mnt\n"
+    $sercon.bp-wait-for-console-string "$ "
+    $sercon.input "cp /mnt/simics_agent_x86_linux64 ~/\n"
+    $sercon.bp-wait-for-console-string "$ "
+    $sercon.input "sudo umount /mnt\n"
+    $sercon.bp-wait-for-console-string "$ "
+
+    echo "Starting simics agent in guest"
+	$sercon.input "./simics_agent_x86_linux64 &\n"
+    $sercon.bp-wait-for-console-string "$ "
+    bp.time.wait-for $cpu 1
+    $sercon.input -e "Enter"
+    bp.time.wait-for $cpu 1
+
+    stop
+    disable-real-time-mode
+})

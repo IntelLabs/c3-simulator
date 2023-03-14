@@ -1,0 +1,182 @@
+decl {
+	! Update the Linux kernel on a previously installed Ubuntu checkpoint.
+
+	param checkpoint : string
+	param save_checkpoint : string = ""
+
+	param kernel : string = "linux/linux.tar.gz"
+	! Location of tarball containing Linux source, expecting the tarball to
+	! contain a single src directory with the Linux kernel sources
+
+	param linux_dirname : string = "src"
+	! Override the folder name of the Linux sources (i.e, the folder that is
+	! within the tarball and extracted into the guest).
+
+	param t_home : string = "/home/simics"
+	! The folder where the soruces will be unpacked
+
+	param linux_hostname : string = "board"
+	! Guest system hostname (used for automation)
+
+	param linux_user : string = "simics"
+	! Guest sytem default user
+	param linux_password : string = "simics"
+	! Guest sytem default user password
+
+	param upload_glibc : bool = FALSE
+	! to update glibc, or not to update glibc?
+
+	param upload_llvm : bool = FALSE
+	! to update llvm, or not to update llvm?
+
+	param grub_default : string = "1>0"
+	param grub_temp_boot : string = "0>0"
+
+	param system : string = board
+	param exit : int = 0
+	param console_output : bool = FALSE
+}
+
+run-python-file scripts/init.py
+
+echo "Loading configuration from " + $checkpoint
+read-configuration $checkpoint
+
+$con = $system.serconsole.con
+$cpu = $system.mb.cpu0.core[0][0]
+
+if not $console_output {
+	$system.console.con.hide
+	$con.disable-cmd-line-output
+}
+start-agent-manager
+$matic = (agent_manager.connect-to-agent)
+
+$save_checkpoint_dirname = (shell("dirname %s" % [$save_checkpoint]))
+echo "Going to create %s" % [$save_checkpoint_dirname]
+shell("mkdir -p %s" % [$save_checkpoint_dirname])
+
+$branch_id = (script-branch "workload" {
+	# Check variable correctness
+	local $was_real_time = (real-time-mode)
+	local $kernel_src = (lookup-file $kernel)
+	local $kernel_dst = $t_home + "/"
+	local $use_real_time = FALSE
+
+	echo "checkpoint %s" % [$checkpoint]
+	echo "save_checkpoint %s" % [$save_checkpoint]
+	echo "kernel %s" % [$kernel]
+	echo "upload_glibc %d" % [$upload_glibc]
+	echo "upload_llvm %d" % [$upload_llvm]
+
+	# local $cc_model_inst = (new-cc-model -connect-all)
+
+	disable-real-time-mode
+
+	if $upload_glibc {
+		@command_to_console("rm -rf glibc")
+		@upload_tarball("glibc/glibc-2.30_install")
+		@command_to_console("ln -nsf /usr/lib64/libgtest.so.0 /home/simics/glibc/glibc-2.30_install/lib")
+		@command_to_console("ln -nsf /usr/lib64/libgomp.so.1 /home/simics/glibc/glibc-2.30_install/lib")
+	}
+
+	if $upload_llvm {
+		@command_to_console("rm -rf llvm")
+		@upload_tarball("llvm/llvm_install")
+	}
+
+	echo "Copying kernel tarball at " + $kernel_src + " to " + $kernel_dst
+	$matic.upload $kernel_src $kernel_dst
+	$matic.wait-for-job
+
+	echo "Extracting kernel and deleting tarball"
+	@sychronizeGuestDate()
+	@command_to_console("tar xzf linux.tar.gz -m && rm linux.tar.gz")
+
+	echo "Installing kernel modules and image"
+	if $use_real_time { enable-real-time-mode }
+	@sychronizeGuestDate()
+	@command_to_console("pushd {}".format(simenv.linux_dirname))
+	@command_to_console("sudo make modules_install")
+	@command_to_console("sudo make install")
+	@command_to_console("popd")
+	if $use_real_time { disable-real-time-mode }
+
+	echo "Updating GRUB2 with temp configuration"
+	@command_to_console("sudo sed -i -E 's@^GRUB_DEFAULT.*@#GRUB_DEFAULT={}@' {}".format(simenv.grub_temp_boot, "/etc/default/grub"))
+	@command_to_console("sudo update-grub")
+
+	echo "Rebooting..."
+	$matic.agent-quit
+	$matic.delete-handle
+	if $use_real_time { enable-real-time-mode }
+	@sychronizeGuestDate()
+	$con.input("sudo reboot\n")
+	echo "Wating for: .*%s.*login:" % [$linux_hostname]
+	$con.bp-wait-for-console-string -regexp ".*%s.*login:" % [$linux_hostname]
+	$cpu.wait-for-time 1 -relative
+	echo "Logging in user: %s" % [$linux_user]
+	$con.input "%s\n" % [$linux_user]
+	$con.bp-wait-for-console-string "Password:"
+	$cpu.wait-for-time 1 -relative
+	echo "       password: %s" % [$linux_password]
+	$con.input "%s\n" % [$linux_password]
+	$con.bp-wait-for-console-string "$ "
+	if $use_real_time { disable-real-time-mode }
+
+	echo "Updating GRUB2 configuration to custom kernel"
+	@command_to_console("sudo sed -i -E 's@^GRUB_DEFAULT.*@#GRUB_DEFAULT={}@' {}".format(simenv.grub_default, "/etc/default/grub"))
+	@command_to_console("sudo update-grub")
+
+	echo "Cleaning up linux sources"
+	@command_to_console("mv {}/vmlinux* .".format(simenv.linux_dirname))
+	@command_to_console("rm -rf {}".format(simenv.linux_dirname))
+
+	stop
+	echo "Enabling CC model..."
+	local $zts_model_inst = (new-zts-model -connect-all)
+	$zts_model_inst += "_0"
+	$zts_model_inst->legacy_always_on=FALSE
+	run
+
+	echo "Rebooting to custom kernel..."
+	if $use_real_time { enable-real-time-mode }
+	@sychronizeGuestDate()
+	$con.input("sudo reboot\n")
+	echo "Wating for: .*%s.*login:" % [$linux_hostname]
+	$con.bp-wait-for-console-string -regexp ".*%s.*login:" % [$linux_hostname]
+	echo "Logging in user: %s" % [$linux_user]
+	$con.input "%s\n" % [$linux_user]
+	$con.bp-wait-for-console-string "Password:"
+	echo "       password: %s" % [$linux_password]
+	$con.input "%s\n" % [$linux_password]
+	$con.bp-wait-for-console-string "$ "
+	if $use_real_time { disable-real-time-mode }
+
+	echo "Starting Simics agent on target"
+	$con.input("./simics_agent_x86_linux64 &\n")
+	$cpu.wait-for-time 1 -relative
+
+	echo "And, we're done, stopping..."
+	stop
+	disable-real-time-mode
+
+	if $save_checkpoint != "" {
+		echo "write-configuration to " + $save_checkpoint
+		write-configuration $save_checkpoint
+		echo "Done writing configuration"
+	}
+
+	if $was_real_time {
+		enable-real-time-mode
+	} else {
+		disable-real-time-mode
+	}
+
+	if $exit != 0 {
+		exit
+	}
+})
+
+run
+echo "Done"
