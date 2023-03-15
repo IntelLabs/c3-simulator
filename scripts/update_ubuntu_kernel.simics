@@ -132,13 +132,6 @@ $branch_id = (script-branch "workload" {
 	@command_to_console("mv {}/vmlinux* .".format(simenv.linux_dirname))
 	@command_to_console("rm -rf {}".format(simenv.linux_dirname))
 
-	stop
-	echo "Enabling CC model..."
-	local $zts_model_inst = (new-zts-model -connect-all)
-	$zts_model_inst += "_0"
-	$zts_model_inst->legacy_always_on=FALSE
-	run
-
 	echo "Rebooting to custom kernel..."
 	if $use_real_time { enable-real-time-mode }
 	@sychronizeGuestDate()
