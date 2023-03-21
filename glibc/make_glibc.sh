@@ -9,10 +9,14 @@ prefix="${cwd}/glibc-2.30_install"
 jobs="-j$(n=$(nproc); echo $((n-2 > 1 ? n-2 : 1)))"
 
 system_libstdcpp="/usr/lib/x86_64-linux-gnu/libstdc++.so.6"
-system_libgcc="/usr/lib/x86_64-linux-gnu/libgcc_s.so.1"
+[[ -e "${system_libstdcpp}" ]] || system_libstdcpp="/usr/lib64/libstdc++.so.6"
+[[ -e "${system_libstdcpp}" ]] || \
+    (echo "Cannot find $(basename ${system_libstdcpp})" && exit 1)
 
-[[ -e "${system_libstdcpp}" ]] || (echo "Cannot find ${system_libstdcpp}" && exit 1)
-[[ -e "${system_libgcc}" ]] || (echo "Cannot find ${system_libgcc}" && exit 1)
+system_libgcc="/usr/lib/x86_64-linux-gnu/libgcc_s.so.1"
+[[ -e "${system_libgcc}" ]] || system_libgcc="/usr/lib64/libgcc_s.so.1"
+[[ -e "${system_libgcc}" ]] || \
+    (echo "Cannot find $(basename ${system_libgcc})" && exit 1)
 
 cd "${cwd}"
 
@@ -37,7 +41,7 @@ fi
 
 
 cd glibc-2.30_build
-./../src/configure prefix="${prefix}" CC=gcc-8 \
+./../src/configure prefix="${prefix}" \
         --enable-multi-arch=no \
         CPPFLAGS="${CPPFLAGS}" \
         CFLAGS="${CFLAGS}"

@@ -64,7 +64,7 @@ $(CKPT_KERNEL).$(ckpt_tag): simics_setup make_llvm make_glibc-noshim linux/linux
 
 # Target with in-guest built kernel (NOTE: very slow to build!)
 $(CKPT_DEBUGGER).$(ckpt_tag): simics_setup make_llvm
-	$(info === Creating Simics checkpoint $@ (glibc, libunwind, lldb, linux)
+	$(info === Creating Simics checkpoint $@ (glibc, libunwind, lldb, linux))
 	./simics -batch-mode scripts/update_libs.simics \
 		do_llvm=TRUE \
 		do_glibc=TRUE \
