@@ -17,6 +17,7 @@ endif
 install_dependencies_ubuntu::
 	$(info === Generic dependencies)
 	sudo apt install -y \
+		build-essential \
     	bison \
     	curl \
     	flex \

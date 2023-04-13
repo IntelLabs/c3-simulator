@@ -349,7 +349,7 @@ static inline T cc_isa_encptr(T ptr, size_t size, uint8_t version = 0) {
 #endif  // _CC_GLOBALS_NO_INCLUDES_
         return (T) nullptr;
     }
-    md.version_ = 0;
+    md.version_ = version;
     return (T)cc_isa_encptr(ptr, &md);
 }
 

@@ -11,3 +11,8 @@ make_glibc-shim:
 
 mrproper::
 	rm -rf glibc/glibc-2.30_build glibc/glibc-2.30_install
+
+install_dependencies_ubuntu::
+	$(info === glibc dependencies)
+	sudo apt install -y \
+		gawk

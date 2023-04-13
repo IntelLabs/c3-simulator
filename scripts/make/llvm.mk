@@ -10,3 +10,9 @@ make_llvm-lldb:
 
 mrproper::
 	rm -rf llvm/llvm_build llvm/llvm_install
+
+install_dependencies_ubuntu::
+	$(info === glibc dependencies)
+	sudo apt install -y \
+		cmake \
+		ninja-build

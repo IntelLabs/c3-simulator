@@ -3,9 +3,9 @@
 :source-language: bash
 
 :ispm-base: intel-simics-package-manager-1.1.0
-:simics-base: /opt/simics/simics-6.0.89
-:simics-pkg-ver: 2021.24
-:simics-pkg-ver-stem: simics-6-packages-2021-24-linux64
+:simics-base: /opt/simics/simics-6.0.157
+:simics-pkg-ver: 2022.49
+:simics-pkg-ver-stem: simics-6-packages-2022-49-linux64
 :simics-repo-url: https://github.com/IntelLabs/c3-simulator.git
 :CKPT_NOKERNEL_BASE: /opt/simics/checkpoints/glibc_latest.ckpt
 :CKPT_KERNEL_BASE: /opt/simics/checkpoints/ubuntu-20.4_latest.ckpt
@@ -31,8 +31,8 @@ git clone --recurse-submodules {simics-repo-url}
 
 ==== Install Simcis
 
-NOTE: To install the latest internal packages, run `./install-simics.sh` instead
-of the following.
+
+
 
 Download and install Simics v.{simics-pkg-ver} from https://software.intel.com/content/www/us/en/develop/articles/simics-simulator.html.
 
@@ -64,9 +64,9 @@ The Simics VMP module should be installed and enabled if possible to significant
 
 ==== Install other dependencies
 
-On Ubuntu 20.04, dependencies can be installed with `make install_dependencies`
-(use `make -n` to dry-run, as this will use `sudo`).  Alternatively, you may
-manually install the following dependencies:
+On Ubuntu 20.04, dependencies can be installed with `make -f config-local.mk
+install_dependencies` (use `make -n` to dry-run, as this will use `sudo`).
+Alternatively, you may manually install the following dependencies:
 
 * bison
 * curl
@@ -281,24 +281,35 @@ Useful examples:
 
 == Regression Testing with PyTest:
 
+The test are currently configure do use LLVM's libunwind, consequently you must
+use an LLVM checkpoint to run unit tests (e.g., {ckpt_llvm} as described above).
+
 Run all tests (12 jobs in parallel):
 
-	pytest -n12 -v python_tests --checkpoint /path/to/checkpoint.ckpt [--model <native|cc|lim>]
+[source,subs=attributes]
+----
+pytest -n12 -v python_tests --checkpoint {ckpt_llvm} [--model native|cc|lim]
+----
 
 Run only spec tests:
 
-	all spec workloads:
-		pytest -n12 -v python_tests/test_spec.py --checkpoint /path/to/checkpoint.ckpt
+[source,subs=attributes]
+----
+pytest -n12 -v python_tests --checkpoint {ckpt_llvm}[--model native|cc|lim]
 
-	specific workloads:
-		pytest -v python_tests/test_spec.py --checkpoint /path/to/checkpoint.ckpt --spec <workload_name> --spec <workload_name> ...
+# all spec workloads:
+pytest -n12 -v python_tests/test_spec.py --checkpoint {ckpt_llvm}
+
+# specific workloads:
+pytest -n12 -v python_tests/test_spec.py --checkpoint {ckpt_llvm} --spec workload_name [--spec workload_name ...]
+----
 
 Run only unit tests:
 
-	pytest -n12 -v python_tests/test_unit.py --checkpoint /path/to/checkpoint.ckpt
-
-Expected result of unit tests
-	=== 1 failed, 17 passed, 26 skipped, 1 xfailed in 689.39s (0:11:29) ====
+[source,subs=attributes]
+----
+	pytest -n12 -v python_tests/test_unit.py --checkpoint {ckpt_llvm}
+----
 
 Common options:
 

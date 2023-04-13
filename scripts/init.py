@@ -68,7 +68,7 @@ def getCkpt():
     return config
 
 def sychronizeGuestDate():
-    out = subprocess.Popen(["date"], stdout=subprocess.PIPE, shell=True).communicate()[0].decode("utf-8").rstrip()
+    out = subprocess.Popen(["LC_ALL=en.EN date"], stdout=subprocess.PIPE, shell=True).communicate()[0].decode("utf-8").rstrip()
     command_to_console("sudo date --set '" + out + "'")
 
 def append_env_var(new_var):
