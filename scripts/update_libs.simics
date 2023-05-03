@@ -36,7 +36,7 @@ decl {
 	! Additional environmental variables to be set when running the build
 	! scripts within the guest.
 
-	param do_exit : bool = FALSE
+	param exit : bool = FALSE
 	param system : string = board
 }
 
@@ -202,7 +202,7 @@ script-branch "upload_and_build" {
 		echo "You can save a checkpoint with 'write-configuration <checkpoint_name>.ckpt'"
 	}
 
-	if $do_exit {
+	if $exit {
 		exit
 	}
 }

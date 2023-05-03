@@ -37,7 +37,7 @@ if not defined ld_flags { $ld_flags = "" }
 if defined wrap { $gcc_flags = "-Wall -Wl,--wrap,malloc -Wl,--wrap,calloc -Wl,--wrap,realloc -Wl,--wrap,free " + $gcc_flags}
 if not defined wrap_flags { $wrap_flags = "" }
 if not defined run_args { $run_args = "" }
-if not defined model { $model = "cc" }
+if not defined model { $model = "c3" }
 
 $cc_model_type = FALSE
 if $model == "cc" or $model == "c3" {

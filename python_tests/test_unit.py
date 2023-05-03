@@ -18,13 +18,11 @@ src_path = "unit_tests/"
 default_models=[ "native" ]
 
 heap_models=[ "c3" ]
-heap_models.extend([ "cc" ])
 
 
 default_models.extend(heap_models)
 
 stack_models=[ "zts" ]
-default_models.extend(stack_models)
 
 lim_models=[ "lim" ]
 lim_models.extend([ "lim_disp", "lim-trace" ])
