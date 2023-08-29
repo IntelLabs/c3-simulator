@@ -299,7 +299,7 @@ static tweak_word pad_tweak(tweak_word tweak) {
     return tweak_padded;
 }
 
-static key_schedule_t GenKeySchedule(tweak_word MK[4]) {
+static key_schedule_t GenKeySchedule(const tweak_word MK[4]) {
     key_schedule_t key_schedule;
     key_schedule.data_round_key = 0;
     int position = 1;
@@ -323,13 +323,13 @@ static key_schedule_t GenKeySchedule(tweak_word MK[4]) {
 
 PointerCipher24b::PointerCipher24b() { key_initialized = false; }
 
-PointerCipher24b::PointerCipher24b(uint8_t *key, int key_size) {
+PointerCipher24b::PointerCipher24b(const uint8_t *key, int key_size) {
     init_key(key, key_size);
 }
 
-void PointerCipher24b::init_key(uint8_t *key, int key_size) {
+void PointerCipher24b::init_key(const uint8_t *key, int key_size) {
     assert(key_size == KEY_SIZE_IN_BYTES);
-    key_schedule = GenKeySchedule(reinterpret_cast<uint64_t *>(key));
+    key_schedule = GenKeySchedule(reinterpret_cast<const uint64_t *>(key));
     tweak = 0;
     tweak_schedule = TwkSc(pad_tweak(tweak), &key_schedule);
     previous_decryption_pair.ciphertext_in = 0;

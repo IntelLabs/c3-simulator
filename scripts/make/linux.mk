@@ -8,7 +8,8 @@ install_dependencies_ubuntu::
 		flex \
 		libelf-dev \
 		libssl-dev \
-		llvm
+		llvm \
+		zstd
 
 .PHONY: make_linux
 make_linux: linux/src/.config

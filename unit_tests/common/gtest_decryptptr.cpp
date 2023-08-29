@@ -1,5 +1,5 @@
 // model: *
-// nomodel: lim
+// nomodel: lim -integrity
 #include <unistd.h>
 #include <gtest/gtest.h>
 #include "unit_tests/common.h"

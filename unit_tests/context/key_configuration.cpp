@@ -1,5 +1,5 @@
 // model: *
-// nomodel: lim zts
+// nomodel: lim zts -integrity
 // xfail: zts
 // TODO(hliljest): test currently relies on heap, should extend to stack-only
 

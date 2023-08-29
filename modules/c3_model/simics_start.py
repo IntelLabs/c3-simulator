@@ -16,17 +16,19 @@ def pre_connect(obj, provider, *tool_args):
         raise cli.CliError(
             "Error: tracer argument specified with nothing connected")
 
-    (debug_on, break_on_decode_fault, disable_data_encryption) = tool_args
+    (debug_on, break_on_decode_fault, disable_data_encryption, integrity) = tool_args
 
     # Without any specified flags, we enable everything by default. 
     if not any(tool_args):
         debug_on = False
         break_on_decode_fault = False
         disable_data_encryption = False
+        integrity = False
 
     args = [["debug_on", debug_on],
             ["break_on_decode_fault", break_on_decode_fault],
-            ["disable_data_encryption", disable_data_encryption]
+            ["disable_data_encryption", disable_data_encryption],
+            ["integrity", integrity]
     ]
 
     # Format a description based on the settings used.
@@ -35,12 +37,14 @@ def pre_connect(obj, provider, *tool_args):
     desc += "D" if debug_on else ""
     desc += "I" if break_on_decode_fault else ""
     desc += "E" if disable_data_encryption else ""    
+    desc += "I" if integrity else ""    
     return (args, desc)
 
 connect_args = [
     cli.arg(cli.flag_t, "-debug-on"),
     cli.arg(cli.flag_t, "-break-on-decode-fault"),
     cli.arg(cli.flag_t, "-disable-data-encryption"),
+    cli.arg(cli.flag_t, "-integrity"),
 ]
 
 connect_doc = \
@@ -50,6 +54,7 @@ connect_doc = \
     <tt>-debug-on</tt> : Enable debug messages.
     <br/><tt>-break-on-decode-fault</tt> : Halt simulation when a non-canonical address is decoded
     <br/><tt>-disable-data-encryption</tt> : Disable C3 data encryption.
+    <br/><tt>-integrity</tt> : Enable data integrity
 
     If no flags are given, all flags will
     be disabled by default.!!"""

@@ -11,7 +11,7 @@ ckpt_tag ::= $(shell git rev-parse --short HEAD)
 CKPT_GLIBC      ?= checkpoints/cc_glibc.ckpt
 CKPT_LLVM       ?= checkpoints/cc_llvm.ckpt
 CKPT_KERNEL     ?= checkpoints/cc_kernel.ckpt
-CKPT_DEBUGGER   ?= checkpoints/debugger.ckpt
+CKPT_DEBUGGER   ?= checkpoints/cc_kernel_lldb.ckpt
 
 # Initial base checkpoints to build upon
 #
@@ -63,14 +63,14 @@ $(CKPT_KERNEL).$(ckpt_tag): simics_setup make_llvm make_glibc-noshim linux/linux
 		save_checkpoint=$@
 
 # Target with in-guest built kernel (NOTE: very slow to build!)
-$(CKPT_DEBUGGER).$(ckpt_tag): simics_setup make_llvm
+$(CKPT_DEBUGGER).$(ckpt_tag): simics_setup make_llvm-lldb make_glibc-noshim $(CKPT_KERNEL).$(ckpt_tag)
 	$(info === Creating Simics checkpoint $@ (glibc, libunwind, lldb, linux))
 	./simics -batch-mode scripts/update_libs.simics \
+		checkpoint=$(CKPT_KERNEL).$(ckpt_tag) \
 		do_llvm=TRUE \
 		do_glibc=TRUE \
 		llvm_buildmode=upload \
 		glibc_buildmode=build \
-		checkpoint=$(CKPT_KERNEL) \
 		save_checkpoint=$@
 
 .PHONY: $(CHECKPOINT_TARGETS)
@@ -90,6 +90,9 @@ ckpt-cc_kernel: $(CKPT_KERNEL)
 
 .PHONY: update-base-ckpts
 update-base-ckpts: $(CKPT_NOKERNEL_BASE)
+
+.PHONY: ckpt-cc_kernel_lldb
+ckpt-cc_kernel_lldb: $(CKPT_DEBUGGER)
 
 .PHONY: clean-checkpoints
 clean-checkpoints:

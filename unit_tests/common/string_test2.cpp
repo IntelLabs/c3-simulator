@@ -1,4 +1,5 @@
 // model: *
+// xfail: -integrity-intra
 #include <assert.h>
 #include <ctype.h>
 #include <stdarg.h>  // for va_list, va_start, va_end

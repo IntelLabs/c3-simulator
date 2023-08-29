@@ -5,8 +5,11 @@
 #ifndef MODULES_COMMON_CCSIMICS_SIMICS_UTIL_H_
 #define MODULES_COMMON_CCSIMICS_SIMICS_UTIL_H_
 
+#include <execinfo.h>
+#include <iomanip>
 #include <sstream>
 #include <string>
+#include <simics/arch/x86.h>
 #include <simics/simulator/output.h>
 
 #if defined(__cplusplus)
@@ -44,9 +47,70 @@ static inline void print_bytes(const char *name, const void *buffer,
 static inline std::string buf_to_hex_string(const uint8_t *buf, size_t len) {
     std::stringstream ss;
     for (size_t i = 0; i < len; ++i) {
-        ss << std::hex << static_cast<int>(buf[i]);
+        ss << std::setw(2) << std::setfill('0') << std::hex
+           << static_cast<int>(buf[i]);
     }
     return ss.str();
+}
+
+static inline const char *convert_reg_to_string(int reg) {
+    switch (reg) {
+    case X86_Reg_Id_PC:
+        return "X86_Reg_Id_PC";
+    case X86_Reg_Id_Rax:
+        return "X86_Reg_Id_Rax";
+    case X86_Reg_Id_Rbx:
+        return "X86_Reg_Id_Rbx";
+    case X86_Reg_Id_Rcx:
+        return "X86_Reg_Id_Rcx";
+    case X86_Reg_Id_Rdx:
+        return "X86_Reg_Id_Rdx";
+    case X86_Reg_Id_Rsp:
+        return "X86_Reg_Id_Rsp";
+    case X86_Reg_Id_Rbp:
+        return "X86_Reg_Id_Rbp";
+    case X86_Reg_Id_Rsi:
+        return "X86_Reg_Id_Rsi";
+    case X86_Reg_Id_Rdi:
+        return "X86_Reg_Id_Rdi";
+    case X86_Reg_Id_R8:
+        return "X86_Reg_Id_R8";
+    case X86_Reg_Id_R9:
+        return "X86_Reg_Id_R9";
+    case X86_Reg_Id_R10:
+        return "X86_Reg_Id_R10";
+    case X86_Reg_Id_R11:
+        return "X86_Reg_Id_R11";
+    case X86_Reg_Id_R12:
+        return "X86_Reg_Id_R12";
+    case X86_Reg_Id_R13:
+        return "X86_Reg_Id_R13";
+    case X86_Reg_Id_R14:
+        return "X86_Reg_Id_R14";
+    case X86_Reg_Id_R15:
+        return "X86_Reg_Id_R15";
+    default:
+        return "X86_Reg_Id_Not_Used";
+    }
+}
+
+static inline void print_simics_stacktrace() {
+    constexpr const int arr_max_size = 1024;
+    void *array[arr_max_size];
+
+    auto size = backtrace(array, arr_max_size);
+    auto strings = backtrace_symbols(array, size);
+
+    if (strings != nullptr) {
+        dbgprint("Stacktrace:");
+        for (int i = 0; i < size; ++i) {
+            SIM_printf("%s\n", strings[i]);
+        }
+    } else {
+        dbgprint("Stacktrace failed");
+    }
+
+    free(strings);
 }
 
 /**

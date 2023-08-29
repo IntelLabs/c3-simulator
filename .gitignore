@@ -42,3 +42,13 @@ logs/*
 compile_commands.json
 linux/linux.tar.gz
 lib
+edk2_src/Build/*
+edk2_src/Conf/*
+edk2_src/images/*
+linux/linux-image-*.deb
+linux/linux-headers-*.deb
+linux/linux-libc-dev_*.deb
+linux/linux-upstream_*.diff.gz
+linux/linux-upstream_*.buildinfo
+linux/linux-upstream_*.changes
+linux/linux-upstream_*.orig.tar.gz

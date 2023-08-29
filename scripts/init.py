@@ -88,6 +88,7 @@ def copy_many_files(files, srcDir="", dstDir="/home/simics"):
         s = "\"" + srcDir + "/" + rm_root.sub('', f) + "\""
         # print("matic0.upload " + s + " " + d)
         run_command("matic0.upload " + s + " " + d)
+    run_command("matic0.wait-for-job")
 
 def copy_include_folders(folders):
     command_to_console("mkdir -p include")
@@ -109,4 +110,4 @@ def copy_include_folders(folders):
         run_command(f"matic0.upload {tarball_path} /home/simics")
         run_command("matic0.wait-for-job")
         run_command(f"! rm -f '{tarball_path}'")
-        command_to_console(f"tar -xf ~/{tarball_fn} -C ~/include")
+        command_to_console(f"tar -mxf ~/{tarball_fn} -C ~/include")

@@ -8,8 +8,35 @@ DEBUG_TEST_RUNNER = False
 
 TEST_HEADER_TRUE_VALUES = [ "yes", "Yes", "true", 1 ]
 
+""" Test header labels
+
+The test header labels are put into the test source files themselves and will
+here be used to configure and select tests to run.
+
+model
+    Run only for listed (space separated) modules
+nomodel
+    Run for all models, except the listed ones
+need_libunwind
+    Need support for C3-aware libunwind
+need_kernel
+    Set to yes to run only for tests that have custom kernel
+no_kernel
+    Set to yes to disable for tests that have custom kernel.
+should_fail
+    Negative test (e.g., attack), should fail or crash
+envp
+    Configure additional environment variables
+ld_flags
+    Configure additional LD_FLAGS
+cxx_flags
+    Configure additional CXX_FLAGS
+simics_args
+    Additional Simics options needed for test
+"""
 TEST_HEADER_LABELS = ["envp", "ld_flags", "should_fail", "cxx_flags", "model",
-                      "nomodel", "xfail", "need_libunwind", "need_kernel"]
+                      "nomodel", "xfail", "need_libunwind", "need_kernel",
+                      "no_kernel", "simics_args"]
 
 gtest_script 			= "unit_tests/runtest_common.simics"
 generic_script          = "scripts/runworkload_common.simics"
@@ -17,12 +44,15 @@ src_path = "unit_tests/"
 
 default_models=[ "native" ]
 
-heap_models=[ "c3" ]
+heap_models=[ "c3", "c3-integrity", "c3-integrity-intra" ]
+
+
 
 
 default_models.extend(heap_models)
 
-stack_models=[ "zts" ]
+
+
 
 lim_models=[ "lim" ]
 lim_models.extend([ "lim_disp", "lim-trace" ])
@@ -63,6 +93,12 @@ class c3_test_case:
             return m.group(1)
         return None
 
+    def get_split(self, label, separator):
+        val = self.get(label)
+        if not val:
+            return []
+        return val.split(separator)
+
     def get(self, label):
         assert label in TEST_HEADER_LABELS, f"Unknown label: {label}"
         if not label in self.header:
@@ -95,6 +131,28 @@ class c3_test_case:
         r = (r".*[\s|,]?\s*" + re.escape(model) + r"\s*(?:[\s|,].*)?$")
         if re.match(r, str):
             return True
+
+        r = (r".*[\s|,]?\s*" + re.escape(model.replace("-integrity-intra", "")) + r"\s*(?:[\s|,].*)?$")
+        if re.match(r, str):
+            return True
+
+        r = (r".*[\s|,]?\s*" + re.escape(model.replace("-integrity", "")) + r"\s*(?:[\s|,].*)?$")
+        if re.match(r, str):
+            return True
+
+        # Also match stuff like nomodel: -integrity
+        model_split = model.split('-')
+        if (len(model_split) > 1):
+            submodel = model_split[1]
+            r = (r".*[\s|,]?\s*" + re.escape(submodel) + r"\s*(?:[\s|,].*)?$")
+            if re.match(r, str):
+                return True
+            if (len(model_split) > 2):
+                submodel = f"{submodel}-{model_split[2]}"
+                r = (r".*[\s|,]?\s*" + re.escape(submodel) + r"\s*(?:[\s|,].*)?$")
+                if re.match(r, str):
+                    return True
+
         return False
 
     def read_test_header(self):
@@ -150,8 +208,8 @@ def get_unwind_args(request):
 def get_model_class(model):
     if model in heap_models:
         return "cc"
-    if model in stack_models:
-        return "zts"
+
+
     if model in lim_models:
         return "lim"
     return model
@@ -194,6 +252,18 @@ def get_cxx_flags(request, testcase, model):
             "-Iinclude" ]))
     if has_libunwind(request):
         cxx_flags = " ".join([ cxx_flags, "-ldl -pthread" ])
+
+    # add cxx flags for the intra-obj model
+    # only if they were not already specified in testcase headers
+    if model == "cc-integrity-intra":
+        if not "-fuse-ld=lld" in cxx_flags:
+            cxx_flags = " ".join([ cxx_flags, "-fuse-ld=lld" ])
+        # NOTE: this checks for the generic argument, allowing
+        # the test header to take priority if the mode is relevant
+        # e.g., -finsert-intraobject-tripwires={all,attr,none}
+        if not "-finsert-intraobject-tripwires" in cxx_flags:
+            cxx_flags = " ".join([ cxx_flags, "-finsert-intraobject-tripwires=all" ])
+
     return cxx_flags
 
 def do_skip(request, testcase, model):
@@ -218,9 +288,14 @@ def do_skip(request, testcase, model):
         pytest.skip("sipping, requires kernel support")
         return True
 
+    # Skip if have but cannot run with custom kernel
+    if has_kernel(request) and testcase.get_bool("no_kernel", False):
+        pytest.skip("sipping, not compatible with kernel support")
+        return True
+
     # Skip if need but don't have libunwind
     if not has_libunwind(request) and testcase.get_bool("need_libunwind", False):
-        pytest.skip("skipping, requres libunwind")
+        pytest.skip("skipping, requires libunwind")
         return True
 
     # Skip if explicitly excluded
@@ -228,6 +303,11 @@ def do_skip(request, testcase, model):
         if testcase.has_model("nomodel", l):
             pytest.skip("skipping, test explicitly disabled")
             return True
+
+    # Intra-object tests currently require kernel checkpoint
+    if model.endswith("-integrity-intra") and not has_kernel(request):
+        pytest.skip("skipping, intra-object tests on non C3-kernel")
+        return True
 
     return False
 
@@ -238,18 +318,20 @@ def do_xfail(testcase, model):
             return True
     return False
 
+def module_dir(model):
+    base_model = model.split("-", 1)[0]
+    return "modules/{}_model".format(base_model)
+
 def parametrize_model(metafunc):
     models = [ ]
 
     if metafunc.config.getoption("model"):
-        # use models from options if provied
+        # use models from options if provided
         models.extend(metafunc.config.getoption("model"))
     else:
-        # Otherwisse check the modules folders for any of the default_models
-        models = filter(
-            lambda m : os.path.exists(os.path.join("modules",
-                                                   "{}_model".format(m))),
-            default_models)
+        # Otherwise check the modules folders for any of the default_models
+        models = filter(lambda m: os.path.exists(
+            module_dir(m)), default_models)
 
     # Filter out models in nomodel
     if metafunc.config.getoption("nomodel"):
@@ -304,6 +386,8 @@ def test_rungtest(checkpoint, src_file, model, request):
         "include_folders=\"unit_tests/include/unit_tests\"",
     ]
 
+    other_args.extend(testcase.get_split("simics_args", " "))
+
     if has_kernel(request):
         other_args.append("zts_legacy_always_on=FALSE")
     else:
@@ -311,6 +395,19 @@ def test_rungtest(checkpoint, src_file, model, request):
 
 
 
+
+    if model.endswith("-integrity"):
+        model = model.replace('-integrity', '')
+        if not "enable_integrity=1" in other_args:
+            other_args.append("enable_integrity=1")
+
+    if model.endswith("-integrity-intra"):
+        model = model.replace('-integrity-intra', '')
+        if not "enable_integrity=1" in other_args:
+            other_args.append("enable_integrity=1")
+
+        # always add compiler
+        other_args.append("compiler=/home/simics/llvm/llvm_install/bin/clang++")
 
     if model == "lim-trace":
         model = "lim_disp"

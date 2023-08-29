@@ -73,6 +73,10 @@ $branch_id = (script-branch "workload" {
 
 	disable-real-time-mode
 
+	@command_to_console("rm -rf malloc crypto")
+	@copy_include_folders("malloc")
+	@copy_include_folders("crypto")
+
 	if $upload_glibc {
 		@command_to_console("rm -rf glibc")
 		@upload_tarball("glibc/glibc-2.30_install")

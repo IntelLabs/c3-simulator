@@ -22,6 +22,17 @@
 
 #include "cc_globals.h"  // NOLINT
 
+// Helper function to unset ICV values before free()
+static void cc_pre_real_free_clear_icv(void *ptr) {
+#ifdef CC_ICV_ENABLE
+    // Clear ICV for old allocation
+    if (!is_encoded_cc_ptr((uint64_t)ptr)) {
+        size_t old_malloc_size = MALLOC_USABLE_SIZE(ptr);
+        cc_set_icv(ptr, old_malloc_size);
+    }
+#endif  // CC_ICV_ENABLE
+}
+
 
 
 
@@ -38,6 +49,7 @@ void quarantine_buffer_free(int buf_index) {
     for (int i = 0; i < QUARANTINE_DEPTH; i++) {
 
 
+        cc_pre_real_free_clear_icv(quarantine_buffers[buf_index][i]);
         REAL_FREE(quarantine_buffers[buf_index][i]);
     }
 }
@@ -50,6 +62,7 @@ void quarantine_insert(void *ptr) {
     if (!cc_quarantine_enabled) {
 
 
+        cc_pre_real_free_clear_icv(ptr);
         REAL_FREE(ptr);
         return;
     }
@@ -102,6 +115,10 @@ void *cc_malloc_encoded(size_t size) {
 
 
     }
+#ifdef CC_ICV_ENABLE
+    // Setup ICV for allocation
+    cc_set_icv(p_encoded, malloc_size);
+#endif  // CC_ICV_ENABLE
     kprintf(stderr, "GLIBC WRAPPER: encoded malloc(%ld) = %p into %p\n", size,
             ptr, p_encoded);
     return p_encoded;
@@ -133,13 +150,16 @@ void *cc_calloc_encoded(size_t num, size_t size) {
 
     }
 
-#ifndef CC_ARCH_NOT_SUPPORT_MEMORY_ACCESS
+#ifdef CC_ICV_ENABLE
+    // Setup ICV for allocation
+    cc_set_icv_and_zero(p_encoded, malloc_size);
+#elif !defined(CC_ARCH_NOT_SUPPORT_MEMORY_ACCESS)
     // Encrypted Memset
     uint8_t *dst = (uint8_t *)p_encoded;
     for (int i = 0; i < num * size; i++) {
         dst[i] = 0x0;
     }
-#endif
+#endif  // CC_ICV_ENABLE
 
     kprintf(stderr, "GLIBC WRAPPER: encoded calloc(%d, %d) = %p into %p\n",
             (int)num, (int)size, ptr, p_encoded);
@@ -199,6 +219,10 @@ void *cc_realloc_encoded(void *p_old_encoded, size_t size) {
 
     }
 
+#ifdef CC_ICV_ENABLE
+    // Setup ICV for allocation
+    cc_set_icv(p_new_encoded, new_malloc_size);
+#endif
 #ifndef CC_ARCH_NOT_SUPPORT_MEMORY_ACCESS
     // Encrypted memcpy
     uint8_t *src = (uint8_t *)p_old_encoded;
@@ -215,6 +239,7 @@ void *cc_realloc_encoded(void *p_old_encoded, size_t size) {
 
 
 
+    cc_pre_real_free_clear_icv(p_old_decoded);
     REAL_FREE(p_old_decoded);
 
 
@@ -243,5 +268,9 @@ void cc_free_encoded(void *p_in) {
         ptr = p_in;
     }
     kprintf(stderr, "GLIBC WRAPPER: free(%p) for %p\n", p_in, ptr);
+    // Need to reset ICV regardless of quarantine for now, the reason being
+    // that the quarantine buffer is not cleared on exit, potentially leaving
+    // ICVs around even on otherwise clean exit.
+    cc_pre_real_free_clear_icv(ptr);
     quarantine_insert(ptr);
 }

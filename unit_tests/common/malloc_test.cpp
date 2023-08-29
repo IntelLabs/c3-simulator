@@ -1,5 +1,6 @@
 // model: *
 // skip: zts
+// xfail: -integrity
 #include <malloc.h>
 #include <xmmintrin.h>
 #include <gtest/gtest.h>

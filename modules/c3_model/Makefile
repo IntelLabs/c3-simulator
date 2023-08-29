@@ -18,10 +18,13 @@ MODULE_CFLAGS += $(XED_CFLAGS)
 
 MODULE_CFLAGS += -Werror
 MODULE_CFLAGS += -Wall
-MODULE_CFLAGS += -O3
+ifeq ($(D),1)
+	MODULE_CFLAGS += -g -O0 -fno-inline
+else
+	MODULE_CFLAGS += -O3
+endif
 MODULE_CFLAGS += -I$(common_dir)
 
 SIMICS_API := latest
 THREAD_SAFE = yes
-
 include $(MODULE_MAKEFILE)

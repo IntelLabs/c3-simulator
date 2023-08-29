@@ -43,6 +43,39 @@
                           (unsigned int)Sim_Attr_Read_Only),                   \
             "b", NULL, "Enables " desc ". Default off.");
 
+#define ADD_DEFAULT_GETTER(option)                                             \
+    inline attr_value_t get_##option(void *, attr_value_t *) {                 \
+        return SIM_make_attr_boolean(this->option);                            \
+    }
+
+#define ADD_DEFAULT_SETTER(option)                                             \
+    inline set_error_t set_##option(void *, attr_value_t *val,                 \
+                                    attr_value_t *) {                          \
+        this->option = SIM_attr_boolean(*val);                                 \
+        return Sim_Set_Ok;                                                     \
+    }
+
+#define ADD_DEFAULT_ACCESSORS(option)                                          \
+    ADD_DEFAULT_GETTER(option)                                                 \
+    ADD_DEFAULT_SETTER(option)
+
+#define ATTR_REGISTER_ACCESSOR(option, desc)                                   \
+    SIM_register_typed_attribute(                                              \
+            connection_class, #option,                                         \
+            [](void *arg, auto *obj, auto *idx) {                              \
+                auto *con = static_cast<ConnectionTy *>(SIM_object_data(obj)); \
+                return con->get_##option(arg, idx);                            \
+            },                                                                 \
+            NULL,                                                              \
+            [](void *arg, auto *obj, auto *val, auto *idx) {                   \
+                auto *con = static_cast<ConnectionTy *>(SIM_object_data(obj)); \
+                return con->set_##option(arg, val, idx);                       \
+            },                                                                 \
+            NULL,                                                              \
+            (attr_attr_t)((unsigned int)Sim_Attr_Optional |                    \
+                          (unsigned int)Sim_Attr_Read_Only),                   \
+            "b", NULL, "Enables " desc ". Default off.");
+
 /**
  * @brief Main object orchestrating connection to on CPU
  *
@@ -131,6 +164,8 @@ class SimicsConnection {
         id_ = SIM_get_processor_number(cpu);
     }
 
+    virtual inline void ctx_loaded_cb() {}
+
     /**
      * @brief Print any stats collected for this conneciton / CPU
      *
@@ -191,6 +226,14 @@ class SimicsConnection {
     }
 
     inline auto
+    register_instruction_decoder_cb(cpu_instruction_decoder_cb_t cb,
+                                    cpu_instruction_disassemble_cb_t disass_cb,
+                                    lang_void *data) const {
+        return ci_iface->register_instruction_decoder_cb(cpu_, con_obj_, cb,
+                                                         disass_cb, data);
+    }
+
+    inline auto
     register_illegal_instruction_cb(cpu_instruction_decoder_cb_t cb,
                                     cpu_instruction_disassemble_cb_t disass_cb,
                                     lang_void *data) const {
@@ -208,6 +251,11 @@ class SimicsConnection {
                           lang_void *data,
                           cpu_callback_free_user_data_cb_t free) const {
         return id_iface->register_emulation_cb(cpu_, cb, handle, data, free);
+    }
+
+    inline auto register_mode_switch_cb(x86_mode_switch_cb_t cb,
+                                        lang_void *data) const {
+        return x86_iface->register_mode_switch_cb(cpu_, con_obj_, cb, data);
     }
 
     inline cpu_bytes_t get_instruction_bytes(instruction_handle_t *h) const {
@@ -359,16 +407,50 @@ class SimicsConnection {
         x86_ex_iface->GP_fault(cpu_, sel_vec, is_vec, desc);
     }
 
+    /**
+     * @brief Raise GP and print msg
+     */
+    inline void raise_fault(const char *msg, bool break_sim = false) const {
+        if (break_sim) {
+            SIM_break_simulation(msg);
+        }
+        gp_fault(0, 0, msg);
+    }
+
+    /**
+     * @brief Raise GP, print Simics stack trace and message
+     */
+    inline void raise_fault_with_stacktrace(const char *msg,
+                                            bool break_sim = false) const {
+        print_simics_stacktrace();
+        raise_fault(msg, break_sim);
+    }
+
     inline uint64_t read_rip() const { return ir_iface->read(cpu_, rip_id); }
     inline uint64_t read_rsp() const { return ir_iface->read(cpu_, rsp_id); }
     inline uint64_t read_rax() const { return ir_iface->read(cpu_, rax_id); }
     inline uint64_t read_rdx() const { return ir_iface->read(cpu_, rdx_id); }
     inline uint64_t read_rdi() const { return ir_iface->read(cpu_, rdi_id); }
+    inline uint64_t read_eflags() const {
+        return ir_iface->read(cpu_, reg_eflags_id_);
+    }
     inline void write_rip(uint64_t val) { ir_iface->write(cpu_, rip_id, val); }
     inline void write_rsp(uint64_t val) { ir_iface->write(cpu_, rsp_id, val); }
     inline void write_rax(uint64_t val) { ir_iface->write(cpu_, rax_id, val); }
     inline void write_rdx(uint64_t val) { ir_iface->write(cpu_, rdx_id, val); }
     inline void write_rdi(uint64_t val) { ir_iface->write(cpu_, rdi_id, val); }
+
+    inline x86_exec_mode_t get_exec_mode() const {
+        return x86_reg_access_iface->get_exec_mode(cpu_);
+    }
+
+    inline x86_xmode_info_t get_xmode_info() const {
+        return x86_reg_access_iface->get_xmode_info(cpu_);
+    }
+
+    inline bool is_64_bit_mode() const {
+        return (this->get_exec_mode() == x86_exec_mode_t::X86_Exec_Mode_64);
+    }
 
     inline uint64_t get_gpr(const int gpr) const {
         return x86_reg_access_iface->get_gpr(cpu_, gpr);

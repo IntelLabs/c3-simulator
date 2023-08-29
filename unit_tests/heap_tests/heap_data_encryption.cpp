@@ -1,4 +1,5 @@
 // model: cc
+// nomodel: -integrity
 
 // #define DEBUG
 #include <unistd.h>

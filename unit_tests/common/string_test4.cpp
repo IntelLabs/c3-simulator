@@ -200,7 +200,11 @@ TEST(STRING, mallocstrfry) {
                 strcpy(str, str_offset);
                 char *returnval;
                 returnval = strfry(str_offset);
-                ASSERT_STRNE(str, returnval);
+                ASSERT_TRUE(
+                    (strcmp(str, returnval) != 0) ||
+                    // Re-randomize, in case we get same string by chance
+                    (strcmp(str, strfry(str_offset)) != 0)
+                );
                 free(str);
             }
         }
@@ -223,7 +227,11 @@ TEST(STRING, mallocstrfryrandomsize) {
         strcpy(str, str_offset);
         char *returnval;
         returnval = strfry(str_offset);
-        ASSERT_STRNE(str, returnval);
+        ASSERT_TRUE(
+            (strcmp(str, returnval) != 0) ||
+            // Re-randomize, in case we get same string by chance
+            (strcmp(str, strfry(str_offset)) != 0)
+        );
         free(str);
         free(buff);
     }

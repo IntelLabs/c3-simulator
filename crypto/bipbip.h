@@ -25,11 +25,11 @@ typedef struct {
     block_word plaintext_out;
 } decryption_pair_t;
 
-class PointerCipher24b {
+class PointerCipher24b final {
  public:
     PointerCipher24b();
-    PointerCipher24b(uint8_t *key, int key_size);
-    void init_key(uint8_t *key, int key_size);
+    PointerCipher24b(const uint8_t *key, int key_size);
+    void init_key(const uint8_t *key, int key_size);
     uint32_t encrypt(uint32_t plaintext, uint64_t tweak);
     uint32_t decrypt(uint32_t ciphertext, uint64_t tweak);
 

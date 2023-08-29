@@ -2,15 +2,15 @@
  Copyright 2016 Intel Corporation
  SPDX-License-Identifier: MIT
 */
-#ifndef MODULES_COMMON_CCSIMICS_C3_MODEL_H_
-#define MODULES_COMMON_CCSIMICS_C3_MODEL_H_
+#ifndef MODULES_COMMON_CCSIMICS_C3_BASE_MODEL_H_
+#define MODULES_COMMON_CCSIMICS_C3_BASE_MODEL_H_
 
 #include <simics/model-iface/cpu-instrumentation.h>
 #include <simics/processor/types.h>
 #include <simics/simulator/control.h>
 #include <simics/simulator/memory.h>
-#include "ccsimics/cc_encoding.h"
 #include "ccsimics/simics_util.h"
+#include "crypto/cc_encoding.h"
 
 enum class RW { READ, WRITE };
 inline bool is_write(enum RW rw) { return rw == RW::WRITE; }
@@ -30,7 +30,7 @@ inline bool is_write(enum RW rw) { return rw == RW::WRITE; }
  * @tparam PtrEncTy A pointer to the PointerEncoding object
  */
 template <typename ConnectionTy, typename CtxTy, typename PtrEncTy>
-class C3Model {
+class C3BaseModel {
  protected:
     ConnectionTy *con_;
     CtxTy *ctx_;
@@ -50,10 +50,10 @@ class C3Model {
     uint64 total_addr_callback_cnt_ = 0;
 
  public:
-    C3Model(ConnectionTy *con, CtxTy *ctx, PtrEncTy *ptrenc)
+    C3BaseModel(ConnectionTy *con, CtxTy *ctx, PtrEncTy *ptrenc)
         : con_(con), ctx_(ctx), ptrenc_(ptrenc) {}
 
-    virtual inline ~C3Model() = default;
+    virtual inline ~C3BaseModel() = default;
 
     /**
      * @brief Register callbacks for simulation
@@ -151,7 +151,7 @@ class C3Model {
      * passed. At that point we have the la_encoded_ and la_decoded_ variables
      * set for the current memory access, so they are safe to use.
      *
-     * The base C3Model does not do any explicit checking.
+     * The base C3BaseModel does not do any explicit checking.
      *
      * @param cpu
      * @param la
@@ -174,7 +174,7 @@ class C3Model {
      * will be used as the data encryption/decryption tweak for the memory
      * access.
      *
-     * The base C3Model simply returns the provided address (which is a CA).
+     * The base C3BaseModel simply returns the provided address (which is a CA).
      *
      * @param address
      * @return uint64_t
@@ -187,8 +187,19 @@ class C3Model {
     inline logical_address_t get_cc_la_decoded() const {
         return this->la_decoded_;
     }
+    inline void set_cc_la_decoded(logical_address_t la) {
+        this->la_decoded_ = la;
+    }
     inline logical_address_t get_cc_la_encoded() const {
         return this->la_encoded_;
+    }
+    inline void set_cc_la_encoded(logical_address_t la) {
+        this->la_encoded_ = la;
+    }
+
+    inline bool is_encoded_pointer() const { return this->is_encoded_pointer_; }
+    inline void set_is_encoded_pointer(bool v) {
+        this->is_encoded_pointer_ = v;
     }
 
  protected:
@@ -208,11 +219,60 @@ class C3Model {
                    "ERROR: invalid la->pa translation. Breaking\n");
         return pa_block.address;
     }
+
+    virtual inline bool should_print_data_modification(const enum RW rw) const {
+        return debug_on();
+    }
+
+    inline void print_data_modification(const uint64_t data_tweak,
+                                        const cpu_bytes_t &bytes,
+                                        const cpu_bytes_t &bytes_mod) {
+        SIM_printf("data_tweak: 0x%016lx\n", data_tweak);
+        SIM_printf("bytes_orig (%lu) = ", bytes.size);
+        for (int i = bytes.size - 1; i >= 0; i--) {
+            SIM_printf("%02x ", bytes.data[i]);
+        }
+        SIM_printf("\n");
+        SIM_printf("bytes_mod  (%lu) = ", bytes.size);
+        for (int i = bytes_mod.size - 1; i >= 0; i--) {
+            SIM_printf("%02x ", bytes_mod.data[i]);
+        }
+        SIM_printf("\n");
+    }
+
+    /**
+     * @brief Handle mismatch between la_decoded and la of mem access
+     *
+     * @return true Mismatch is expected, and data modification should continue
+     * @return false Stop mem access handling before data modification
+     */
+    inline virtual bool handle_la_mismatch_on_mem_access(logical_address_t la) {
+        static int la_mismatch_count = 0;
+        if (la_mismatch_count >= 3) {
+            return false;
+        }
+
+        la_mismatch_count++;
+        SIM_printf("******** WARNING: memory R/W to LA different from "
+                   "decoded LA *************\n");
+        SIM_printf("LA for this R/W: 0x%016lx\n", (uint64_t)la);
+        SIM_printf("decoded LA     : 0x%016lx\n", (uint64_t)this->la_decoded_);
+        if (this->is_crossing_page_first_) {
+            SIM_printf("CROSSING_PAGE_FIRST");
+            this->is_crossing_page_first_ = false;
+        }
+        if (this->is_crossing_page_second_) {
+            SIM_printf("CROSSING_PAGE_SECOND");
+            this->is_crossing_page_second_ = false;
+        }
+        this->is_encoded_pointer_ = false;
+        return false;
+    }
 };
 
 template <typename ConnectionTy, typename CtxTy, typename PtrEncTy>
 template <typename HandlerTy>
-void C3Model<ConnectionTy, CtxTy, PtrEncTy>::register_callbacks(
+void C3BaseModel<ConnectionTy, CtxTy, PtrEncTy>::register_callbacks(
         ConnectionTy *con) {
     /* Register a callback that will be called for each instruction */
     con_->register_address_before_cb(
@@ -223,7 +283,6 @@ void C3Model<ConnectionTy, CtxTy, PtrEncTy>::register_callbacks(
 
     if (con_->disable_data_encryption) {
         SIM_printf("[CC] DATA ENCRYPTION DISABLED\n");
-        return;
     }
 
     con_->register_read_before_cb(
@@ -257,7 +316,7 @@ void C3Model<ConnectionTy, CtxTy, PtrEncTy>::register_callbacks(
 }
 
 template <typename ConnectionTy, typename CtxTy, typename PtrEncTy>
-logical_address_t C3Model<ConnectionTy, CtxTy, PtrEncTy>::address_before(
+logical_address_t C3BaseModel<ConnectionTy, CtxTy, PtrEncTy>::address_before(
         logical_address_t la, address_handle_t *handle) {
     this->total_addr_callback_cnt_++;
     if (is_encoded_cc_ptr(la)) {
@@ -343,7 +402,7 @@ logical_address_t C3Model<ConnectionTy, CtxTy, PtrEncTy>::address_before(
 }
 
 template <typename ConnectionTy, typename CtxTy, typename PtrEncTy>
-void C3Model<ConnectionTy, CtxTy, PtrEncTy>::modify_data_on_mem_access(
+void C3BaseModel<ConnectionTy, CtxTy, PtrEncTy>::modify_data_on_mem_access(
         memory_handle_t *mem, enum RW rw) {
     if (!this->is_encoded_pointer_) {
         return;
@@ -380,44 +439,25 @@ void C3Model<ConnectionTy, CtxTy, PtrEncTy>::modify_data_on_mem_access(
             return;
         }
     }
+    // We expect that la_decoded_ from address_before matches with la here
     if (la != this->la_decoded_) {
-        static int la_mismatch_count = 0;
-        if (la_mismatch_count >= 3) {
+        // If not, check if the mismatch is expected or can be fixed somehow
+        if (!handle_la_mismatch_on_mem_access(la)) {
+            // If not, stop here before data modification
             return;
         }
-        la_mismatch_count++;
-        SIM_printf("******** WARNING: memory R/W to LA different from "
-                   "decoded LA *************\n");
-        SIM_printf("LA for this R/W: 0x%016lx\n", (uint64_t)la);
-        SIM_printf("decoded LA     : 0x%016lx\n", (uint64_t)this->la_decoded_);
-        if (this->is_crossing_page_first_) {
-            SIM_printf("CROSSING_PAGE_FIRST");
-            this->is_crossing_page_first_ = false;
-        }
-        if (this->is_crossing_page_second_) {
-            SIM_printf("CROSSING_PAGE_SECOND");
-            this->is_crossing_page_second_ = false;
-        }
-        this->is_encoded_pointer_ = false;
-        return;
     }
     check_memory_access(la, rw, bytes.data, bytes.size);
     uint64_t data_tweak = get_data_tweak(this->la_encoded_);
     ptr_metadata_t cc_metadata = {0};
     cpu_bytes_t bytes_mod =
             encrypt_decrypt_data(&cc_metadata, data_tweak, bytes, bytes_buffer);
-    con_->set_bytes(mem, bytes_mod);
-    if (debug_on()) {
-        SIM_printf("bytes_orig (%lu) = ", bytes.size);
-        for (int i = bytes.size - 1; i >= 0; i--) {
-            SIM_printf("%02x ", bytes.data[i]);
-        }
-        SIM_printf("\n");
-        SIM_printf("bytes_mod  (%lu) = ", bytes.size);
-        for (int i = bytes_mod.size - 1; i >= 0; i--) {
-            SIM_printf("%02x ", bytes_mod.data[i]);
-        }
-        SIM_printf("\n");
+
+    if (!this->con_->disable_data_encryption) {
+        con_->set_bytes(mem, bytes_mod);
+    }
+    if (should_print_data_modification(rw)) {
+        print_data_modification(data_tweak, bytes, bytes_mod);
     }
 
     //  Handling Cross-Page Accesses
@@ -444,7 +484,7 @@ void C3Model<ConnectionTy, CtxTy, PtrEncTy>::modify_data_on_mem_access(
 }
 
 template <typename ConnectionTy, typename CtxTy, typename PtrEncTy>
-void C3Model<ConnectionTy, CtxTy, PtrEncTy>::exception_before(
+void C3BaseModel<ConnectionTy, CtxTy, PtrEncTy>::exception_before(
         conf_object_t *obj, conf_object_t *cpu, exception_handle_t *eq_handle,
         lang_void *unused) {
     auto *con = static_cast<ConnectionTy *>(SIM_object_data(obj));
@@ -458,7 +498,7 @@ void C3Model<ConnectionTy, CtxTy, PtrEncTy>::exception_before(
 }
 
 template <typename ConnectionTy, typename CtxTy, typename PtrEncTy>
-void C3Model<ConnectionTy, CtxTy, PtrEncTy>::print_stats() {
+void C3BaseModel<ConnectionTy, CtxTy, PtrEncTy>::print_stats() {
     SIM_printf("Printing stats\n");
     SIM_printf("Total write count:   %llu\n", this->total_write_cnt_);
     SIM_printf("Total read count:   %llu\n", this->total_read_cnt_);
@@ -474,4 +514,4 @@ void C3Model<ConnectionTy, CtxTy, PtrEncTy>::print_stats() {
     SIM_printf("Encoded to total ratio:         %.2f%%\n", ratio);
 }
 
-#endif  // MODULES_COMMON_CCSIMICS_C3_MODEL_H_
+#endif  // MODULES_COMMON_CCSIMICS_C3_BASE_MODEL_H_

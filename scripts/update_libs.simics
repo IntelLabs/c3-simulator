@@ -150,6 +150,10 @@ script-branch "upload_and_build" {
 	}
 	@command_to_console("cd ~")
 
+	@command_to_console("rm -rf malloc crypto")
+	@copy_include_folders("malloc")
+	@copy_include_folders("crypto")
+
 	if $do_glibc {
 		@command_to_console("sudo chown simics:simics -R " + simenv.glibc_dest_dir)
 		@command_to_console("tar -xf patchelf-0.10.tar.gz && cd patchelf-0.10")

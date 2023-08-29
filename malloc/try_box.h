@@ -22,10 +22,12 @@ static inline int try_box(uint64_t ptr, size_t size, ptr_metadata_t *md) {
 
     if (leading_zeros_in_diff < 64 - PLAINTEXT_SIZE) {
 #ifndef _CC_GLOBALS_NO_INCLUDES_
+#ifndef _EXCLUDE_IN_EDK2_BUILD_
         fprintf(stderr,
                 "try_box: region is not boxable"
                 " (leading_zeros_in_diff = %d, must be less than %d)\n",
                 leading_zeros_in_diff, 64 - PLAINTEXT_SIZE);
+#endif  // _EXCLUDE_IN_EDK2_BUILD_
 #endif  // _CC_GLOBALS_NO_INCLUDES_
         return 0;
     }

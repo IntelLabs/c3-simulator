@@ -20,11 +20,11 @@
 #include <simics/simulator-api.h>
 #include <simics/simulator/conf-object.h>
 #include <simics/simulator/output.h>
-#include "ccsimics/cc_encoding.h"
 #include "ccsimics/data_encryption.h"
 #include "ccsimics/simics_connection.h"
 #include "ccsimics/simics_util.h"
 #include "crypto/ascon_cipher.h"
+#include "crypto/cc_encoding.h"
 #include "malloc/cc_globals.h"
 
 #define DEF_DATA_KEY_BYTES                                                     \
@@ -87,7 +87,10 @@ class Context {
     // The context struct corresponding to the OS view of the ctx, i.e., in
     // contrst to ds_key, dp_key, etc. cc_context does not contain key
     // schedules or such internal information.
-    context_t cc_context_;
+    context_t cc_context_{.ds_key_bytes_ = DEF_DATA_KEY_BYTES,
+                          .dp_key_bytes_ = DEF_DATA_KEY_BYTES,
+                          .c_key_bytes_ = DEF_DATA_KEY_BYTES,
+                          .addr_key_bytes_ = DEF_ADDR_KEY_BYTES};
 
     SimicsConnection *con_;
     CCPointerEncoding *const m_ptrenc_;
@@ -105,6 +108,8 @@ class Context {
     }
 
     virtual inline ~Context() = default;
+
+    inline context_t *get_raw_ctx() { return &cc_context_; }
 
     /**
      * @brief Registers callbacks for the ISA extensions
@@ -199,28 +204,10 @@ class Context {
      */
     inline virtual cpu_emulation_t save_context() {
         const uint64_t rax_val = con_->read_rax();
-        con_->write_mem_8B(rax_val, cc_context_.flags_.raw_);
-        con_->write_mem_8B(rax_val + offsetof(context_t, reserved1_),
-                           cc_context_.reserved1_);
-
-#define write_cc_context_field(_f, _key)                                       \
-    do {                                                                       \
-        const auto key_size = sizeof_field(context_t, _f);                     \
-        const auto la_start = rax_val + offsetof(context_t, _f);               \
-        const auto la_end = la_start + key_size;                               \
-        con_->write_mem(la_start, la_end,                                      \
-                        reinterpret_cast<char *>((_key).bytes_));              \
-    } while (0);
-
-        write_cc_context_field(dp_key_bytes_, dp_key_);
-        write_cc_context_field(c_key_bytes_, c_key_);
-        if (!kFixedSharedKey)
-            write_cc_context_field(ds_key_bytes_, ds_key_);
-        if (!kFixedAddrKey)
-            write_cc_context_field(addr_key_bytes_, addr_key_);
+        con_->write_mem(rax_val, rax_val + sizeof(struct cc_context),
+                        reinterpret_cast<char *>(&cc_context_));
 
         return CPU_Emulation_Fall_Through;
-#undef write_cc_context_field
     }
 
     /**
@@ -232,40 +219,21 @@ class Context {
      */
     inline virtual cpu_emulation_t load_context() {
         const uint64_t rax_val = con_->read_rax();
+        con_->read_mem(rax_val, rax_val + sizeof(struct cc_context),
+                       reinterpret_cast<char *>(&cc_context_));
 
-        // Copy static 8B values directly
-        cc_context_.flags_.raw_ = con_->read_mem_8B(rax_val);
-        cc_context_.reserved1_ =
-                con_->read_mem_8B(rax_val + offsetof(context_t, reserved1_));
-
-        // Create a common buffer for reading key bytes
-        uint8_t buff[kMaxKeyByteSize];
-
-#define read_cc_context_field(_f, _key)                                        \
-    do {                                                                       \
-        const auto key_size = sizeof_field(context_t, _f);                     \
-        const auto la_start = rax_val + offsetof(context_t, _f);               \
-        const auto la_end = la_start + key_size;                               \
-        con_->read_mem(la_start, la_end, reinterpret_cast<char *>(buff));      \
-    } while (0);
-
-        read_cc_context_field(dp_key_bytes_, dp_key);
-        set_data_key(&dp_key_, buff);
-
-        read_cc_context_field(c_key_bytes_, c_key);
-        set_data_key(&c_key_, buff);
+        set_data_key(&dp_key_, cc_context_.dp_key_bytes_);
+        set_data_key(&c_key_, cc_context_.c_key_bytes_);
 
         if (!kFixedSharedKey) {
-            read_cc_context_field(ds_key_bytes_, ds_key);
-            set_data_key(&ds_key_, buff);
+            set_data_key(&ds_key_, cc_context_.ds_key_bytes_);
         }
         if (!kFixedAddrKey) {
-            read_cc_context_field(addr_key_bytes_, addr_key);
-            set_addr_key(&addr_key_, buff);
+            set_addr_key(&addr_key_, cc_context_.addr_key_bytes_);
         }
 
+        con_->ctx_loaded_cb();
         return CPU_Emulation_Fall_Through;
-#undef read_cc_context_field
     }
 
     /**
@@ -363,6 +331,54 @@ class Context {
         cc_context_.flags_.bitfield_.cc_enabled_ = val;
     }
 
+#ifdef CC_INTEGRITY_ENABLE
+    /**
+     * @brief Set cc_context.icv_lock
+     *
+     * @param val
+     */
+    inline void set_icv_enabled(bool val) {
+        cc_ctx_set_icv_enabled(&cc_context_, val);
+    }
+
+    /**
+     * @brief Set cc_context.icv_lock
+     *
+     * @param val
+     */
+    inline bool get_icv_enabled() {
+        return cc_ctx_get_icv_enabled(&cc_context_);
+    }
+
+    inline bool get_and_zero_icv_map_reset() {
+        const bool r = cc_ctx_get_icv_map_reset(&cc_context_);
+        cc_ctx_set_icv_map_reset(&cc_context_, 0);
+        return r;
+    }
+
+    /**
+     * @brief Set cc_context.icv_lock
+     *
+     * @param val
+     */
+    inline void set_icv_lock(bool val) {
+        cc_ctx_set_icv_lock(&cc_context_, val);
+    }
+
+    /**
+     * @brief Get cc_context.icv_lock
+     *
+     * @return true
+     * @return false
+     */
+    inline bool get_icv_lock() const {
+        return cc_ctx_get_icv_lock(&cc_context_);
+    }
+#endif  // CC_INTEGRITY_ENABLE
+
+
+
+
     /**
      * @brief Debug function that dumps keys to Simics console
      *
@@ -407,6 +423,23 @@ class Context {
                static_cast<const void *>(bytes), kAddrKeyBytesSize);
         init_addr_key(key);
         return true;
+    }
+
+ public:
+    template <typename ConTy>
+    static inline void register_attributes(conf_class_t *cl) {
+        SIM_register_typed_attribute(
+                cl, "c3_context",
+                [](auto *, auto *obj, auto *) -> attr_value_t {
+                    auto *con = reinterpret_cast<ConTy *>(SIM_object_data(obj));
+                    return con->ctx_->get_attr_data();
+                },
+                nullptr,
+                [](auto *, auto *obj, auto *val, auto *) -> set_error_t {
+                    auto *con = reinterpret_cast<ConTy *>(SIM_object_data(obj));
+                    return con->ctx_->set_from_attr_data(val);
+                },
+                nullptr, Sim_Attr_Optional, "d", NULL, "c3_context data");
     }
 
  private:

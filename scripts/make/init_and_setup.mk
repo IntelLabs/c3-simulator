@@ -23,6 +23,9 @@ $(PATCHELF_PKG):
 $(FILES_TO_DECOMPRESS) : % : %.zst
 	test -e $@ || zstd -d $^
 
+.PHONY: decompress
+decompress: $(FILES_TO_DECOMPRESS)
+
 install_dependencies_ubuntu::
 	$(info === Depencencies for decompressing large files)
 	sudo apt install -y \

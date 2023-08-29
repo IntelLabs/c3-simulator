@@ -8,6 +8,11 @@
 
 run-python-file scripts/init.py
 
+# by default environment gives CA to (malloc) memory objects
+# set disable_cc_env=1 to disable LA to CA encoding in the environment
+# other values still enable CC_ENV
+if not defined disable_cc_env { $disable_cc_env= 0 }
+
 @cmd_to_shell("hostname")
 
 if not defined exit { $exit = 0 }
@@ -37,7 +42,8 @@ if not defined ld_flags { $ld_flags = "" }
 if defined wrap { $gcc_flags = "-Wall -Wl,--wrap,malloc -Wl,--wrap,calloc -Wl,--wrap,realloc -Wl,--wrap,free " + $gcc_flags}
 if not defined wrap_flags { $wrap_flags = "" }
 if not defined run_args { $run_args = "" }
-if not defined model { $model = "c3" }
+if not defined model { $model = "cc" }
+if not defined enable_integrity { $enable_integrity = FALSE }
 
 $cc_model_type = FALSE
 if $model == "cc" or $model == "c3" {
@@ -48,7 +54,14 @@ if $model == "cc" or $model == "c3" {
 
 
 if $cc_model_type {
-    @append_env_var("CC_ENABLED=1")
+	if $disable_cc_env != 1 {
+		@append_env_var("CC_ENABLED=1") # environment return CA by default
+		if $enable_integrity == TRUE {
+			@append_env_var("CC_ICV_ENABLED=1")
+		}
+	} else {
+		@append_env_var("")             # initialize env_var
+	}
 
 
 } else if $model == "lim" {
@@ -141,17 +154,24 @@ $branch_id = (script-branch "workload" {
 		local $src_full_path = (lookup-file "%simics%/"+ $src_path + "/" + $src_file)
 		echo "  Copying src file %s to /home/simics" % [$src_full_path]
 		matic0.upload $src_full_path "/home/simics/"
+		matic0.wait-for-job
 	}
 	if defined include_file {
 		if $include_file != "" {
-			echo "  Copying inluce file: '%s'" % [$include_file]
+			echo "  Copying include file: '%s'" % [$include_file]
 			@copy_many_files(simenv.include_file, simenv.src_path)
 		}
 	}
-	if defined include_folders {
+	if defined include_folders {  # add to command line include_folders="folderlist"
 		@copy_include_folders(simenv.include_folders)
 	}
-	@copy_include_folders("malloc")
+
+	if defined upload_c3_headers {
+		# these folders are copied by default
+		@command_to_console("rm -rf malloc crypto")
+		@copy_include_folders("malloc")
+		@copy_include_folders("crypto")
+	}
 
 	if $cc_model_type {
 		echo "  Copying malloc files"
@@ -164,6 +184,16 @@ $branch_id = (script-branch "workload" {
 		matic0.wait-for-job
 	}
 	# matic0.upload (lookup-file "%simics%/glibc/glibc-2.30_install/libc-2.30.so") "/home/simics/glibc/glibc-2.30_install/lib/"
+
+	if defined upload_libunwind {
+		(matic0.upload
+			(lookup-file "%simics%/llvm/llvm_install/lib/x86_64-unknown-linux-gnu/libunwind.so.1")
+			"/home/simics/llvm/llvm_install/lib/x86_64-unknown-linux-gnu/")
+		(matic0.upload
+			(lookup-file "%simics%/llvm/llvm_install/lib/x86_64-unknown-linux-gnu/libunwind.so.1.0")
+			"/home/simics/llvm/llvm_install/lib/x86_64-unknown-linux-gnu/")
+		matic0.wait-for-job
+	}
 
 	if defined upload_glibc {
 		echo "  Copying libc-2.30.so libpthread-2.30.so libdl-2.30.so"
@@ -185,6 +215,9 @@ $branch_id = (script-branch "workload" {
 	###############################
 	#     Compile & run           #
 	###############################
+	# Add custom LLVM to path
+	@command_to_console('export PATH=home/simics/llvm/llvm_install/bin:$PATH')
+
 	if not defined obj_files {
 		$obj_files = $src_file
 	} else {
@@ -219,9 +252,14 @@ $branch_id = (script-branch "workload" {
 			@command_to_console("cp " + simenv.workload_name + " " + simenv.workload_name + "_orig")
 			if $unwinder == "default_unwinder" {
 				@command_to_console("patchelf --set-interpreter /home/simics/glibc/glibc-2.30_install/lib/ld-2.30.so --set-rpath /home/simics/glibc/glibc-2.30_install/lib " + simenv.workload_name)
+
 			} else {
 				@command_to_console("patchelf --set-interpreter " + simenv.glibc_dir + "/ld-2.30.so " + simenv.workload_name)
-				@command_to_console("patchelf --set-rpath " + simenv.glibc_dir + ":/home/simics/llvm/llvm_install/lib " + simenv.workload_name)
+
+				$rpath = ($glibc_dir
+						+ ":/home/simics/llvm/llvm_install/lib"
+						+ ":/home/simics/llvm/llvm_install/lib/x86_64-unknown-linux-gnu")
+				@command_to_console("patchelf --set-rpath " + simenv.rpath + " " + simenv.workload_name)
 				@command_to_console("patchelf --add-needed libunwind.so.1 " + simenv.workload_name)
 			}
 			#@command_to_console("patchelf --add-needed libm.so.6 " + simenv.workload_name)
@@ -235,6 +273,10 @@ $branch_id = (script-branch "workload" {
 		}
 	}
 
+	if defined enable_coredumps {
+		@command_to_console("ulimit -c unlimited")
+	}
+
 	if defined pre_run_fixup {
 		@command_to_console(simenv.pre_run_fixup)
 	}
@@ -245,22 +287,18 @@ $branch_id = (script-branch "workload" {
 			$model_inst = lim_0
 		}
 	} else if $cc_model_type {
-		if $model != "c3"  {
-			if defined disable_encryption {
-				echo "Disabling data encryption"
-				$model_inst = (new-cc-model -connect-all -disable-data-encryption)
-			} else {
-				$model_inst = (new-cc-model -connect-all)
-			}
+		if defined disable_encryption {
+			echo "Disabling data encryption"
+			@run_command(f"$model_inst = (new-{simenv.model}-model -connect-all -disable-data-encryption)")
 		} else {
-			if defined disable_encryption {
-				echo "Disabling data encryption"
-				$model_inst = (new-c3-model -connect-all -disable-data-encryption)
-			} else {
-				$model_inst = (new-c3-model -connect-all)
-			}
+			@run_command(f"$model_inst = (new-{simenv.model}-model -connect-all)")
 		}
 		$model_inst += "_0"
+
+		if $enable_integrity {
+			$model_inst->integrity=TRUE
+		}
+
 
 
 	} else if $model == "lim" {

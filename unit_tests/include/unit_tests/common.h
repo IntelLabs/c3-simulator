@@ -38,11 +38,11 @@
 
 constexpr const char *const c3_model = define_to_str(C3_MODEL);
 
-constexpr static inline bool is_model(const char *const str) {
+static inline bool is_model(const char *const str) {
     return std::strcmp(str, c3_model) == 0;
 }
 
-constexpr static inline bool model_has_zts() { return is_model("zts"); }
+static inline bool model_has_zts() { return is_model("zts"); }
 
 typedef struct {
     uint64_t do_not_use : (64 - RSP_ID_SIZE - RSP_CIPHERTEXT_SIZE);
@@ -77,7 +77,6 @@ typedef struct {
                              : "ecx", "edx", "ebx");                           \
     } while (0)
 #endif
-__attribute__((deprecated))  // use cc_isa_encptr instead!
 
 static inline bool
 have_cc_heap_encoding() {

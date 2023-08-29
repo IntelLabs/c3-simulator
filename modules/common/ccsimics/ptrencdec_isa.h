@@ -9,6 +9,7 @@ extern "C" {
 #include <xed-interface.h>  // NOTE! The xed header is C-only
 }
 #include "ccsimics/data_encryption.h"
+#include "ccsimics/xed_util.h"
 #include "malloc/cc_globals.h"
 
 #define LOCK_OFFSET 1
@@ -54,7 +55,7 @@ template <typename CpuTy, typename PETy> class PtrencdecIsa {
 
     bool m_debug_ = false;
     bool m_enable_encoding_ = true;
-    bool m_enable_decoding_ = false;
+    bool m_enable_decoding_ = true;
 
  protected:
     CpuTy *const m_cpu_;
@@ -206,7 +207,11 @@ template <typename CpuTy, typename PETy> class PtrencdecIsa {
         const int size_reg = regs->size_reg_;
 
         const uint64_t ptr_encoded = m_cpu_->get_gpr(ptr_reg);
-        const uint64_t ptr_decoded = m_pe_->decode_pointer(ptr_encoded);
+
+        const uint64_t ptr_decoded =
+                (m_enable_decoding_ && is_encoded_cc_ptr(ptr_encoded))
+                        ? m_pe_->decode_pointer(ptr_encoded)
+                        : ptr_encoded;
 
         m_cpu_->set_gpr(ptr_reg, ptr_decoded);
 
@@ -254,45 +259,6 @@ template <typename CpuTy, typename PETy> class PtrencdecIsa {
         return {0, NULL};
     }
 
-    static inline int convert_xed_reg_to_simics(xed_reg_enum_t xed_reg) {
-        switch (xed_reg) {
-        case XED_REG_RAX:
-            return 0;
-        case XED_REG_RCX:
-            return 1;
-        case XED_REG_RDX:
-            return 2;
-        case XED_REG_RBX:
-            return 3;
-        case XED_REG_RSP:
-            return 4;
-        case XED_REG_RBP:
-            return 5;
-        case XED_REG_RSI:
-            return 6;
-        case XED_REG_RDI:
-            return 7;
-        case XED_REG_R8:
-            return 8;
-        case XED_REG_R9:
-            return 9;
-        case XED_REG_R10:
-            return 10;
-        case XED_REG_R11:
-            return 11;
-        case XED_REG_R12:
-            return 12;
-        case XED_REG_R13:
-            return 13;
-        case XED_REG_R14:
-            return 14;
-        case XED_REG_R15:
-            return 15;
-        default:
-            return -1;
-        }
-    }
-
     static inline int xed_decode_register(const uint8_t *opcode, int size,
                                           cc_ptrenc_regs_t *cc_ptrenc_regs) {
         // xed3_operand_set_mpxmode(&xedd, 1);
@@ -318,7 +284,37 @@ template <typename CpuTy, typename PETy> class PtrencdecIsa {
         }
         return 0;
     }
+
+    /**
+     * @brief Register ptr encoding ISA attributes with Simics
+     *
+     * If registered, then the connection needs to provide a get_ptrencdec_isa()
+     * function that provides a pointer to the correct instance of PrencdecIsa.
+     *
+     * @param cl
+     */
+    static inline void register_attributes(conf_class_t *cl);
 };
+
+template <typename CpuTy, typename PETy>
+inline void PtrencdecIsa<CpuTy, PETy>::register_attributes(conf_class_t *cl) {
+    /* Register cc_isa_ptrenc that controls m_enable_encoding_c*/
+    SIM_register_typed_attribute(
+            cl, "cc_isa_ptrenc",
+            [](auto *d, auto *obj, auto *idx) -> attr_value_t {
+                auto *con = reinterpret_cast<CpuTy *>(SIM_object_data(obj));
+                auto *self = con->get_ptrencdec_isa();
+                return SIM_make_attr_boolean(self->m_enable_encoding_);
+            },
+            nullptr,
+            [](auto *d, auto *obj, auto *val, auto *idx) -> set_error_t {
+                auto *con = reinterpret_cast<CpuTy *>(SIM_object_data(obj));
+                auto *self = con->get_ptrencdec_isa();
+                self->m_enable_encoding_ = SIM_attr_boolean(*val);
+                return Sim_Set_Ok;
+            },
+            nullptr, Sim_Attr_Optional, "b", NULL, "C3 ISA ptrenc");
+}
 
 }  // namespace ccsimics
 

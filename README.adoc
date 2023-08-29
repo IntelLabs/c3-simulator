@@ -7,12 +7,16 @@
 :simics-pkg-ver: 2022.49
 :simics-pkg-ver-stem: simics-6-packages-2022-49-linux64
 :simics-repo-url: https://github.com/IntelLabs/c3-simulator.git
+:simics-public-url: https://software.intel.com/content/www/us/en/develop/articles/simics-simulator.html.
 :CKPT_NOKERNEL_BASE: /opt/simics/checkpoints/glibc_latest.ckpt
 :CKPT_KERNEL_BASE: /opt/simics/checkpoints/ubuntu-20.4_latest.ckpt
 :CKPT_GLIBC: checkpoints/cc_glibc.ckpt
 :CKPT_LLVM: checkpoints/cc_llvm.ckpt
 :CKPT_KERNEL: checkpoints/cc_kernel.ckpt
 :SIMICS_BIN: /opt/simics/simics-6/simics-latest/bin
+:SIMICS_DEF_MODULE: cc
+
+
 
 WARNING: The contents of this repository and linked repositories are solely for
 research purposes and may contain software with vulnerabilities, such as
@@ -25,6 +29,146 @@ conclusions or recommendations expressed in this material are those of the
 author(s) and do not necessarily reflect the views of the Space and Naval
 Warfare Systems Center Pacific or the Defense Advanced Research Project Agency.
 
+== Quick start
+
+Assumes Simics is installed (if not, see <<Install Simcis>>) and that the path
+to Simics is {SIMICS_BIN} (if not, add `SIMICS_BIN=/some/path` to the
+simics_setup make command below).
+
+=== Setting up the C3 simulator
+
+To setup user-space C3 environment in the PIL environment:
+
+[source,subs=attributes]
+----
+# Clone repository
+mkdir -p [CC_INSTALL_DIRECTORY]
+cd -p [CC_INSTALL_DIRECTORY]
+git clone --recurse-submodules {simics-repo-url} .
+# Configure Simics project
+make -f config-user.mk simics_setup
+# Generate checkpoint (built upon {CKPT_NOKERNEL_BASE})
+make ckpt-cc_llvm
+# Build C3 Simics modules
+make -B
+----
+
+
+=== Running simple workloads
+
+To run simple workloads (e.g., `microbenchmarks/hello.cpp`):
+
+[source,subs=attributes]
+----
+./simics scripts/runworkload_common.simics \
+    src_path=microbenchmarks \
+    src_file=hello.cpp \
+    workload_name=a.out \
+    model={SIMICS_DEF_MODULE} \
+    checkpoint={CKPT_LLVM} \
+    gcc_flags="-g -gdwarf -Werror -ldl -lm -lpthread -pthread -Iinclude"
+----
+
+=== Running pre-compiled binaries
+
+[source,subs=attributes]
+----
+clang++ microbenchmarks/hello.cpp -o a.out
+./simics scripts/runworkload_common.simics \
+    src_path=. \
+    src_file=a.out \
+    workload_name=a.out \
+    model={SIMICS_DEF_MODULE} \
+    checkpoint={CKPT_LLVM} \
+    nobuild=TRUE \
+    env_vars="LD_LIBRARY_PATH=/home/simics/glibc/glibc-2.30_install/lib"
+----
+
+=== Running unit tests
+
+To run individual unit tests (.e.g, `unit_tests/common/gtest_hello.cpp`):
+
+[source,subs=attributes]
+----
+./simics unit_tests/runtest_common.simics \
+    src_path=unit_tests/common \
+    src_file=gtest_hello.cpp \
+    workload_name=a.out \
+    model={SIMICS_DEF_MODULE} \
+    checkpoint={CKPT_LLVM} \
+    gcc_flags="-g -gdwarf -Werror -ldl -lm -lpthread -pthread -Iinclude -DC3_MODEL={SIMICS_DEF_MODULE}"
+----
+
+To run all unit tests:
+
+[source,subs=attributes]
+----
+# Run all unit tests locally on all available models
+pytest -v python_tests/test_unit.py --checkpoint {ckpt_llvm}
+# Run all unit tests for specific models (can specify multiple --model args)
+pytest -v python_tests/test_unit.py --checkpoint {ckpt_llvm} --model {SIMICS_DEF_MODULE}
+----
+
+
+
+
+=== C3 integrity and intra-object tripwires
+
+The {SIMICS_DEF_MODULE}_model has initial functional support for integrity
+checking.  By default, only writes are integrity checked, see see <<Integrity
+check configuration and use>> for more details.
+
+To enable integrity support, you can pass `enable_integrity=1` to the simics
+scripts. The pytest scripts also support two pseudo modules,
+`{SIMICS_DEF_MODULE}-integrity` and `{SIMICS_DEF_MODULE}-integrity-intra`, which
+will run on the {SIMICS_DEF_MODULE}, but will enable module and test
+configuration to exercise C3 integrity checking or C3 integrity checking along
+with compiler-instrumented intra-object tripwires.
+
+[source,subs=attributes]
+----
+# For single workloads:
+./simics scripts/runworkload_common.simics \
+    src_path=microbenchmarks \
+    src_file=hello.cpp \
+    workload_name=a.out \
+    model={SIMICS_DEF_MODULE} \
+    enable_integrity=1 \
+    checkpoint={CKPT_LLVM} \
+    gcc_flags="-g -gdwarf -Werror -ldl -lm -lpthread -pthread -Iinclude"
+
+# For unit tests:
+pytest -v python_tests/test_unit.py --checkpoint {ckpt_llvm} --model {SIMICS_DEF_MODULE}-integrity
+----
+
+To enable ICV-based intra-object tripwires, you need to use the C3-enabled
+LLVM/Clang. This can be done by using the custom clang installed on a
+C3-kernel enabled checkpoint with:
+
+[source,subs=attributes]
+----
+./simics scripts/runworkload_common.simics \
+    src_path=microbenchmarks \
+    src_file=hello.cpp \
+    workload_name=a.out \
+    model={SIMICS_DEF_MODULE} \
+    enable_integrity=1 \
+    checkpoint={CKPT_KERNEL} \
+    compiler="/home/simics/llvm/llvm_install/bin/clang++" \
+    gcc_flags="-ldl -lm -lpthread -pthread -fuse-ld=lld -finsert-intraobject-tripwires=all"
+
+# For unit tests:
+pytest -v python_tests/test_unit.py --checkpoint {ckpt_kernel} --have-kernel --model {SIMICS_DEF_MODULE}-integrity-intra
+----
+
+NOTE: At present, the `-finsert-intraobject-tripwires` option does not support
+multiple parallel compilation jobs. If compiling manually (e.g., not with the
+`runworkload_common.simics` script), make sure to set `-j1` to avoid parallel
+builds.
+
+
+
+
 == Installation
 
 === Clone source code
@@ -36,12 +180,15 @@ git clone --recurse-submodules {simics-repo-url}
 
 === Download and install required packages
 
+
+
+
 ==== Install Simcis
 
 
 
 
-Download and install Simics v.{simics-pkg-ver} from https://software.intel.com/content/www/us/en/develop/articles/simics-simulator.html.
+Download and install Simics v.{simics-pkg-ver} from {simics-public-url}.
 
 Create an `/opt/simics` directory owned by the current user.
 
@@ -73,18 +220,10 @@ The Simics VMP module should be installed and enabled if possible to significant
 
 On Ubuntu 20.04, dependencies can be installed with `make -f config-local.mk
 install_dependencies` (use `make -n` to dry-run, as this will use `sudo`).
-Alternatively, you may manually install the following dependencies:
 
-* bison
-* curl
-* flex
-* git
-* g++-8
-* libatk1.0-dev
-* libatk-bridge2.0-dev
-* libgtk3-dev
-* python-3-pip
-* pytest with xdist (install with 'pip3 install pytest-xdist')
+Alternatively, you may manually install the following dependencies: bison, curl,
+flex, git, g++-8, libatk1.0-dev, libatk-bridge2.0-dev, libgtk3-dev,
+python-3-pip, pytest, and pytest-xdist.
 
 === Initialize and build Simics project
 
@@ -97,46 +236,33 @@ The code listing below assume default paths, but these can be configured by
 creating a `config-local.mk` file or setting the corresponding environment
 variables. Some relevant variables and their default values are:
 
-SIMICS_BIN :: The path to Simics installation bin directory (default:
-{simics_bin})
-
-CKPT_NOKERNEL_BASE :: Path for a base no-kernel checkpoint that is used as the
-starting point when generating checkpoints without custom kernel. If not set,
-new checkpoints will be created from scratch. Default value is ignored if path
-is not found.  (default: `{ckpt_nokernel_base}`)
-
-CKPT_GLIBC :: Path for checkpoint with glibc, this is generated with `make
-ckpt-cc_gblic`, and will be a symlink to tagged checkpoint folder (default:
-{ckpt_glibc})
-
-CKPT_LLVM :: Similar to CKPT_GLIBC, but includes llvm (default: {ckpt_llvm})
-
-=== (Optional) Cleaning build artifacts and files
-
-To clean Simics modules:
+[source,subs=attributes]
 ----
-make clean
+# The path to Simics installation bin directory
+SIMICS_BIN=${simics_bin}
+
+# Path for a base no-kernel checkpoint that is used as the starting point when
+# generating checkpoints without custom kernel. If not set, new checkpoints will
+# be created from scratch. Default value is ignored if path is not found.
+CKPT_NOKERNEL_BASE={ckpt_nokernel_base}
+
+# Path for checkpoint with glibc, this is generated with `make ckpt-cc_glibc`,
+# and will be a symlink to tagged checkpoint folder.
+CKPT_GLIBC={ckpt_glibc}
+
+Similar to CKPT_GLIBC, but includes llvm.
+CKPT_LLVM={ckpt_llvm}
 ----
 
-To clean moost build artifacts (e.g., for glibc, llvm, and linux), run:
-
-----
-make mrproper
-----
-
-Neither of the commands will remove checkpoints, to do so delete the checkpoints
-folder(s) manually. Note that checkpoints by default depend on the originating
-checkpoint, e.g., on CKPT_NOKERNEL_BASE, if used when createing subsequent
-checkpoints.
 
 ==== Initialize Simics project files and build checkpoint
 
 To initialize the Simics project and build additional dependencies, you can run
-the following commands, however, you will:
+the following commands:
 
 [source,subs=attributes]
 ----
-#  To install Simics, and download additional ependencies, and extract files
+#  To install Simics, download additional dependencies, and extract files
 make -f config-user.mk simics_setup
 
 #  NOTE: If needed, set SIMICS_BIN (default: {simics_bin})
@@ -155,45 +281,52 @@ make -B
 Alternatively, you can use the old `./setup_and_build.sh`, or you can use the
 `-n` dry-run flag when running make to inspect commands to run separately.
 
+=== Cleaning build artifacts and files
 
-=== (Optional) Build Doxygen codumentation
+----
+# To clean only Simics modules:
+make clean
+# To clean most build artifacts (e.g., for glibc, llvm, and linux), run:
+make mrproper
+----
 
-The follwoing commands creates doxygen documentation for `malloc`, `crypto` and
+Neither of the commands will remove checkpoints. To do so, delete the
+checkpoints folder(s) manually. Note that checkpoints by default are incremental
+and depend on the originating checkpoint.
+
+=== Build Doxygen documentation
+
+The following commands create doxygen documentation for `malloc`, `crypto` and
 `modules` under `doc/doxygen`, you can browse the docs by starting from
-`doc/doxygen/html/index.html`. The dcoumentation is auto-generated from inline
+`doc/doxygen/html/index.html`. The documentation is auto-generated from inline
 annotations in comments in the source code files themselves.
 
 ----
 make documentation
 ----
 
-=== (Optional) Checkpoint with Ubuntu and custom kernel
+=== Creating checkpoint with Ubuntu and custom kernel
 
-Linux has the following additional dependencies (which are auotmatically
-installed by `make install_dependencies`):
+Linux dependencies are installed along with `make install_dependencies`.
+Alternatively, install the following manually: bison, dwarves, flex, libelf-dev,
+libssl-dev, and llvm.
 
-* bison
-* dwarves
-* flex
-* libelf-dev
-* libssl-dev
-* llvm
+==== Create initial Ubuntu checkpoint
 
-==== Crate initial Ubuntu checkpoint
-
-To set up a Ubuntu checkpoint with a custom kernel, you first need to create a
-base Ubuntu checkpoint. This may be done with an automated scripts, but success
-may wary, in which case the initial checkpoint must be manually configured:
+To set up an Ubuntu checkpoint with a custom kernel, you first need to create a
+base Ubuntu checkpoint. This may be attempted with an automated script, but
+instructions are also included below for manually creating the initial
+checkpoint in case the automated script fails:
 
 ----
 ./simics -batch-mode scripts/install_ubuntu.simics
 ----
 
-When done, use `write-cofniguration {ckpt_kernel_base}` to save a checkpoint.
+When done, use `write-configuration {ckpt_kernel_base}` to save a checkpoint.
 The scripts by default expect to find the checkpoint at `{ckpt_kernel_base}`,
 override `CKPT_KERNEL_BASE` in `config-local.mk` to use different path.
 
-If the script failes, you may need to manually install Ubuntu. To do so, you can
+If the script fails, you may need to manually install Ubuntu. To do so, you can
 follow the steps found in `scripts/install_ubuntu.simics`. To troubleshoot the
 script, run with graphical console enabled; the initial boot will be in the VGA
 view, after which GRUB will configure the serial console and continue
@@ -213,82 +346,79 @@ checkpoint with a custom kernel:
 make {ckpt_kernel}
 ----
 
-This will create a new checkpoint at CKPT_KERENL.GIT_SHA and create/update a
+This will create a new checkpoint at CKPT_KERNEL.GIT_SHA and create/update a
 symlink to it at CKPT_KERNEL.
 
 == Running a workload in Simics
 
+----
 ./simics [simics_args] <run_script.simics> [run_arg1=val1 run_arg2=val2 ...]
+----
 
 Useful simics_args (optional):
 
-	-no-win 		run simics with GUI windows hidden (can be displayed on demand)
-
-	-batch-mode		run in batch mode (will exit with 0 on success or non-zero on error)
+[frame=none,grid=none,cols="1,4"]
+|====
+| -no-win       | run simics with GUI windows hidden (can be displayed on demand)
+| -batch-mode   | run in batch mode (will exit with 0 on success or non-zero on error)
+|====
 
 
 Most run scripts are based on the generic template scripts/runworkload_common.simics
 It supports the following run-time arguments (see default values in the script):
 
-	checkpoint		Specifies the checkpoint.
-
-        system                  Sets the top level module. For QSP use "board" (default), for TGL: "tgl"
-
-	compiler		Overrides the compiler for the workload (unless using custom build command).
-				Default: g++
-
-	gcc_flags		Additional compiler flags
-
-	model			Selects the model to run the workload with.
-				Values: cc / lim / lim_disp / zts / native. Default: cc
-				Note: lim_disp configures the LIM model to perform data displacement instead of shifting.
-
-	run_args		Specifies additional workload run arguments
-
-	env_vars		Overrides environment arguments for the workload run command
-
-	build_cmd		Overrides the default build command
-
-	run_cmd			Overrides the default run command
-
-	pre_run_fixup		Additional bash commands to execute inside Simics before running the workload
-
-	debug			Set to 1 to enable Simics module debug printfs
-
-	download_bin_path	If defined, the workload binary and the compiled libc will be downloaded to the specified host directory.
-
-	disable_meta_check	LIM-only setting. If set to 1, tags and bounds will not be evaluated
-
-	break_on_exeption	LIM-only setting. If set to 1, will stop simulation on exeptions (excl. Page Fault)
-
-	magic			Set to 1 to enable magic breakpoint
-
-	mem_profiler		Set to 1 to enable memory profiler
-
-	run_cycles=N		If set, the workload will run for N billion cycles and pause.
-				Default: and stop after completion
-
-	cache			Set to 1 to enable caching model
-
-	exit			Set to 1 to exit on completion (code 0) or error (non-zero code)
+[frame=none,grid=none,cols="1,4"]
+|====
+|checkpoint    | Specifies the checkpoint.
+|system        | Sets the top level module. For QSP use "board" (default), for
+                 TGL: "tgl"
+|compiler      | Overrides the compiler for the workload (unless using custom build command). Default: g++
+|gcc_flags     | Additional compiler flags
+|model         | Selects the model to run the workload with. Default: cc, or c3. (Note: lim_disp configures the LIM model to perform data displacement instead of shifting.)
+|enable_integrity=1 | Enable C3 integrity checking
+|run_args      | Specifies additional workload run arguments
+|env_vars      | Overrides environment arguments for the workload run command
+|build_cmd     | Overrides the default build command
+|run_cmd       | Overrides the default run command
+|pre_run_fixup | Additional bash commands to execute inside Simics before running the workload
+|debug         | Set to 1 to enable Simics module debug printfs
+|download_bin_path  |If defined, the workload binary and the compiled libc will be downloaded to the specified host directory.
+|disable_meta_check |LIM-only setting. If set to 1, tags and bounds will not
+	                     be evaluated
+|break_on_exception |LIM-only setting. If set to 1, will stop simulation on exceptions (excl. Page Fault)
+|magic         | Set to 1 to enable magic breakpoint
+|mem_profiler  | Set to 1 to enable memory profiler
+|run_cycles=N  | If set, the workload will run for N billion cycles and pause. Default: and stop after completion
+|cache         | Set to 1 to enable caching model
+|exit          | Set to 1 to exit on completion (code 0) or error (non-zero
+                 code)
+|====
 
 Additional run-time arguments for specific scripts:
 spec/scripts/generic.simics:
 
-	spec			Specifies the SPEC workload name.
-
-	spec_size		Specifies the SPEC experiment size (test/ref)
+[frame=none,grid=none,cols="1,4"]
+|====
+|spec          | Specifies the SPEC workload name.
+|spec_size     | Specifies the SPEC experiment size (test/ref)
+|====
 
 
 Useful examples:
 
-        ./simics spec/scripts/generic.simics spec=libquantum spec_size=test model=lim cache=1
-
-        ./simics unit_tests/runtest_common.simics model=lim workload_name=lim_malloc_test src_path=unit_tests src_file=lim_malloc_test.cpp run_args="--gtest_filter=Calloc*"
+----
+./simics scripts/runworkload_common.simics \
+	src_path=microbenchmarks \
+	src_file=hello.cpp \
+	workload_name=a.out \
+	model=cc \
+	checkpoint={CKPT_LLVM} \
+	gcc_flags="-g -gdwarf -Werror -ldl -lm -lpthread -pthread -Iinclude"
+----
 
 == Regression Testing with PyTest:
 
-The test are currently configure do use LLVM's libunwind, consequently you must
+The tests are currently configured to use LLVM's libunwind, consequently you must
 use an LLVM checkpoint to run unit tests (e.g., {ckpt_llvm} as described above).
 
 Run all tests (12 jobs in parallel):
@@ -315,17 +445,71 @@ Run only unit tests:
 
 [source,subs=attributes]
 ----
-	pytest -n12 -v python_tests/test_unit.py --checkpoint {ckpt_llvm}
+pytest -n12 -v python_tests/test_unit.py --checkpoint {ckpt_llvm}
 ----
 
 Common options:
 
-	--model			Run tests only with the specified model.
-				Can specify multiple by appending '--model <model_name>' for each model
-	-d 			load-balance tests.  shortcut for '--dist=load'
+[frame=none,grid=none,cols="1,4"]
+|====
+| --checkpoint PATH     | Set the checkpoint to use
+| --model               | Run tests only with the specified model. Can specify multiple models by appending '--model <model_name>' for each model. The '{SIMICS_DEF_MODULE}-integrity' model will run on the {SIMICS_DEF_MODULE} but configure it to use integrity
+| -d                    | Load-balance tests. Shortcut for '--dist=load'
+| --have-kernel         | Run C3-kernel dependent tests
+|====
+
+You can also run individual unit tests:
+
+----
+./simics unit_tests/runtest_common.simics \
+	src_path=unit_tests/common \
+	src_file=gtest_hello.cpp \
+	workload_name=a.out \
+	model=cc \
+	checkpoint={CKPT_LLVM} \
+	include_folders="unit_tests/include/unit_tests" \
+	gcc_flags="-g -gdwarf -Werror -ldl -lm -lpthread -pthread -Iinclude -Iunit_tests/include -DC3_MODEL=cc"
+----
 
 
-== (Optional) pre-commit hooks
+== Model configuration
+
+=== Integrity check configuration and use
+
+The {SIMICS_DEF_MODULE}_model has initial functional support for integrity
+checking based on ICV value bound to a virtual address and corresponding
+expected cryptographic address. By default, only writes are integrity checked,
+but exact behavior can be configured via Simics model attributes:
+
+[source,subs=attributes]
+----
+{SIMICS_DEF_MODULE}0_0->integrity_break_on_write_mismatch = (default: FALSE)
+{SIMICS_DEF_MODULE}0_0->integrity_fault_on_write_mismatch = (default: TRUE)
+{SIMICS_DEF_MODULE}0_0->integrity_break_on_read_mismatch = (default: FALSE)
+{SIMICS_DEF_MODULE}0_0->integrity_fault_on_read_mismatch = (default: FALSE)
+{SIMICS_DEF_MODULE}0_0->integrity_warn_on_read_mismatch = (default: FALSE)
+----
+
+Kernel support for ICV handling is not implemented, hence the virtual-address
+based ICVs of one C3-enabled application may pollute the virtual addresses of
+other C3-enabled applications running within the same simulator instance. At
+present, the ICVs can be programmatically reset in the Simics shell or script
+by:
+
+[source,subs=attributes]
+----
+{SIMICS_DEF_MODULE}0_0->integrity_icv_reset = TRUE
+----
+
+Alternatively, there is a helper function:, `cc_trigger_icv_map_reset`, that can
+be used to trigger ICV reset from within the target (e.g., a program running on
+the simulation). NOTE: this functionality is exposed without access-control
+only for testing purposes.
+
+
+
+
+== Pre-commit hooks
 
 To enforce coding guidelines locally, you can install pre-commit hooks that run
 tests on the staged changes before allowing a commit to pass. To enable default
@@ -341,10 +525,10 @@ make pre-commit-uninstall
 The pre-commit hook will apply whitespace fixes automatically to your working
 tree, you can inspect those changes using `git diff`, and then add them to your
 commit. The pre-commit hook also runs `clang-format` and `cpplint` checks. You
-may need to manually adress issues reported by `cpplint`. Cosmetic code style
+may need to manually address issues reported by `cpplint`. Cosmetic code style
 changes can be automatically applied by running `clang-format -i <filename>`, or
 without the `-i` flag to only inspect changes without applying them.
 
-In some cases you may not be able to fix all changes, or may need to commit
-files intentionally violate code style rules, to do so, you can always run `git
-commit --no-verify`, however, when possible, avoid disregarding issues.
+In some cases you may not be able to fix all changes, or you may need to commit
+files that intentionally violate code style rules. To do so, you can always run
+`git commit --no-verify`. However, when possible, avoid disregarding issues.

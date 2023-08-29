@@ -19,6 +19,7 @@ project_dir := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
 # Project makefiles
 include scripts/make/checkpoints.mk
+include scripts/make/cmake.mk
 include scripts/make/compile_commands.mk
 include scripts/make/dependencies.mk
 include scripts/make/documentation.mk

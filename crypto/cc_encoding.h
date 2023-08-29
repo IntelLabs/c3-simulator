@@ -11,11 +11,13 @@
  * Original Authors: Andrew Weiler, Sergej Deutsch
  */
 
-#ifndef MODULES_COMMON_CCSIMICS_CC_ENCODING_H_
-#define MODULES_COMMON_CCSIMICS_CC_ENCODING_H_
+#ifndef CRYPTO_CC_ENCODING_H_
+#define CRYPTO_CC_ENCODING_H_
 
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
+#include "crypto/ascon_cipher.h"
 #include "crypto/bipbip.h"
 #include "malloc/cc_globals.h"
 
@@ -44,8 +46,8 @@ static inline uint64_t generate_tweak(uint64_t pointer,
  * @return ptr_metadata_t
  */
 static inline ptr_metadata_t get_pointer_metadata(uint64_t pointer) {
-    const auto size = static_cast<unsigned char>(get_size(pointer));
-    ptr_metadata_t metadata = {.uint64_ = 0};
+    const auto size = static_cast<unsigned char>(ca_get_size(pointer));
+    ptr_metadata_t metadata = {0};
     metadata.size_ = size;
     metadata.adjust_ = (size == SPECIAL_SIZE_ENCODING_WITH_ADJUST) ? 0x1 : 0x0;
     return metadata;
@@ -145,7 +147,7 @@ class CCPointerEncoding {
      * @param key
      * @param key_size
      */
-    inline void init_pointer_key(uint8_t *key, int key_size) {
+    inline void init_pointer_key(const uint8_t *key, int key_size) {
         pointer_cipher_.init_key(key, key_size);
     }
 
@@ -159,8 +161,7 @@ class CCPointerEncoding {
      * @return uint64_t
      */
     virtual inline uint64_t decode_pointer(uint64_t encoded_pointer) {
-        return undecorate_ptr(decrypt_ptr({.uint64_ = encoded_pointer}))
-                .uint64_;
+        return undecorate_ptr(decrypt_ptr(get_ca_t(encoded_pointer))).uint64_;
     }
 
     /**
@@ -175,11 +176,80 @@ class CCPointerEncoding {
      */
     virtual inline uint64_t encode_pointer(uint64_t pointer,
                                            ptr_metadata_t *ptr_metadata) {
-        return encrypt_ptr(decorate_ptr({.uint64_ = pointer}, ptr_metadata),
+        return encrypt_ptr(decorate_ptr(get_ca_t(pointer), ptr_metadata),
                            ptr_metadata)
                 .uint64_;
     }
 };
 
+/**
+ * @brief Exact copy of CCPointerEncoding but marked final
+ *
+ * May avoid some bugs in bare-bones testing environments without loader
+ * support, e.g., by avoiding the need for virtual call tables and such.
+ */
+class CCPointerEncodingPlain final : public CCPointerEncoding {
+ public:
+    CCPointerEncodingPlain() {}
+};
+
+class CCDataEncryption {
+ public:
+    static constexpr size_t kKeySize = KEY_SIZE(CC_DATA_CIPHER);
+    static constexpr uint8_t kDefaultKey[kKeySize] = {
+            0xb5, 0x82, 0x4d, 0x03, 0x17, 0x5c, 0x25, 0x2a,
+            0xfc, 0x71, 0x1e, 0x01, 0x02, 0x60, 0x87, 0x91};
+
+ private:
+    data_key_t data_key_ = {0};
+
+ public:
+    inline CCDataEncryption() {
+        data_key_.size_ = kKeySize;
+        set_key(kDefaultKey);
+    }
+
+    inline void set_key(const uint8_t *key) {
+        memcpy(data_key_.bytes_, key, kKeySize);
+    }
+
+    inline void encrypt_decrypt_bytes(uint64_t la, uint8_t *const input,
+                                      uint8_t *output, size_t size) {
+        CCDataEncryption::encrypt_decrypt_bytes(la, &data_key_, input, output,
+                                                size);
+    }
+
+ public:
+    static inline void get_countermode_mask(uint64_t la,
+                                            const data_key_t *data_key,
+                                            size_t size, uint8_t *mask) {
+        uint64_t *mask64 = reinterpret_cast<uint64_t *>(mask);
+        uint64_t la_base = (la >> CIPHER_OFFSET_BITS) << CIPHER_OFFSET_BITS;
+        uint64_t la_end = la + static_cast<uint64_t>(size);
+
+        while (la_base < la_end) {
+            *mask64 = ascon64b_stream(la_base, data_key->bytes_);
+            mask64++;
+            la_base += (0x1ULL << CIPHER_OFFSET_BITS);
+        }
+    }
+
+    static inline uint8_t *encrypt_decrypt_bytes(uint64_t la_encoded,
+                                                 const data_key_t *data_key,
+                                                 const uint8_t *input,
+                                                 uint8_t *output, size_t size) {
+        uint8_t countermode_mask_unaligned[64 + 8];
+        get_countermode_mask(la_encoded, data_key, size,
+                             countermode_mask_unaligned);
+
+        int offset = static_cast<int>(la_encoded & 0x7);
+        for (int i = size - 1; i >= 0; i--) {
+            output[i] = input[i] ^ countermode_mask_unaligned[i + offset];
+        }
+
+        return output;
+    }
+};
+
 #endif
-#endif  // MODULES_COMMON_CCSIMICS_CC_ENCODING_H_
+#endif  // CRYPTO_CC_ENCODING_H_
