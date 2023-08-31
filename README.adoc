@@ -96,6 +96,7 @@ To run individual unit tests (.e.g, `unit_tests/common/gtest_hello.cpp`):
     workload_name=a.out \
     model={SIMICS_DEF_MODULE} \
     checkpoint={CKPT_LLVM} \
+    include_folders=unit_tests/include/unit_tests \
     gcc_flags="-g -gdwarf -Werror -ldl -lm -lpthread -pthread -Iinclude -DC3_MODEL={SIMICS_DEF_MODULE}"
 ----
 
@@ -137,7 +138,18 @@ with compiler-instrumented intra-object tripwires.
     checkpoint={CKPT_LLVM} \
     gcc_flags="-g -gdwarf -Werror -ldl -lm -lpthread -pthread -Iinclude"
 
-# For unit tests:
+# For single unit tests:
+./simics unit_tests/runtest_common.simics \
+    src_path=unit_tests/common \
+    src_file=gtest_hello.cpp \
+    workload_name=a.out \
+    model={SIMICS_DEF_MODULE} \
+    enable_integrity=1 \
+    checkpoint={CKPT_LLVM} \
+    include_folders=unit_tests/include/unit_tests \
+    gcc_flags="-g -gdwarf -Werror -ldl -lm -lpthread -pthread -Iinclude -DC3_MODEL={SIMICS_DEF_MODULE}"
+
+# For unit tests via pytest:
 pytest -v python_tests/test_unit.py --checkpoint {ckpt_llvm} --model {SIMICS_DEF_MODULE}-integrity
 ----
 
@@ -147,6 +159,7 @@ C3-kernel enabled checkpoint with:
 
 [source,subs=attributes]
 ----
+# For stand-alone workloads
 ./simics scripts/runworkload_common.simics \
     src_path=microbenchmarks \
     src_file=hello.cpp \
@@ -157,7 +170,21 @@ C3-kernel enabled checkpoint with:
     compiler="/home/simics/llvm/llvm_install/bin/clang++" \
     gcc_flags="-ldl -lm -lpthread -pthread -fuse-ld=lld -finsert-intraobject-tripwires=all"
 
-# For unit tests:
+# For single unit tests
+./simics unit_tests/runtest_common.simics \
+    src_path=unit_tests/common \
+    src_file=gtest_hello.cpp \
+    workload_name=a.out \
+    model={SIMICS_DEF_MODULE} \
+    enable_integrity=1 \
+    checkpoint={CKPT_KERNEL} \
+    compiler="/home/simics/llvm/llvm_install/bin/clang++" \
+    include_folders=unit_tests/include/unit_tests \
+    env_vars="LD_LIBRARY_PATH=/home/simics/glibc/glibc-2.30_install/lib:/home/simics/llvm/llvm_install/lib" \
+    gcc_flags="-ldl -lm -lpthread -pthread -fuse-ld=lld -finsert-intraobject-tripwires=all -Iinclude -DC3_MODEL={SIMICS_DEF_MODULE}"
+
+
+# For unit tests via pytest:
 pytest -v python_tests/test_unit.py --checkpoint {ckpt_kernel} --have-kernel --model {SIMICS_DEF_MODULE}-integrity-intra
 ----
 
