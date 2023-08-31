@@ -152,7 +152,7 @@ $branch_id = (script-branch "workload" {
 
 	echo "Starting Simics agent on target"
 	$con.input("./simics_agent_x86_linux64 &\n")
-	$cpu.wait-for-time 1 -relative
+	$cpu.wait-for-time 5 -relative
 
 	echo "And, we're done, stopping..."
 	stop
