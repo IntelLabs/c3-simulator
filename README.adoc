@@ -2,10 +2,10 @@
 :source-highlighter: pygments
 :source-language: bash
 
-:ispm-base: intel-simics-package-manager-1.1.0
-:simics-base: /opt/simics/simics-6.0.157
-:simics-pkg-ver: 2022.49
-:simics-pkg-ver-stem: simics-6-packages-2022-49-linux64
+:ispm-base: intel-simics-package-manager-1.7.5
+:simics-base: /opt/simics/simics-6.0.169
+:simics-pkg-ver: 2023.31
+:simics-pkg-ver-stem: simics-6-packages-2023-31-linux64
 :simics-repo-url: https://github.com/IntelLabs/c3-simulator.git
 :simics-public-url: https://software.intel.com/content/www/us/en/develop/articles/simics-simulator.html.
 :CKPT_NOKERNEL_BASE: /opt/simics/checkpoints/glibc_latest.ckpt
@@ -14,7 +14,7 @@
 :CKPT_LLVM: checkpoints/cc_llvm.ckpt
 :CKPT_KERNEL: checkpoints/cc_kernel.ckpt
 :SIMICS_BIN: /opt/simics/simics-6/simics-latest/bin
-:SIMICS_DEF_MODULE: cc
+:SIMICS_DEF_MODULE: c3
 
 
 
@@ -31,13 +31,15 @@ Warfare Systems Center Pacific or the Defense Advanced Research Project Agency.
 
 == Quick start
 
-Assumes Simics is installed (if not, see <<Install Simcis>>) and that the path
-to Simics is {SIMICS_BIN} (if not, add `SIMICS_BIN=/some/path` to the
-simics_setup make command below).
+Assumes dependencies are installed, Simics is installed, and that the path to
+Simics is {SIMICS_BIN} (if not, add `SIMICS_BIN=/some/path` to the simics_setup
+make command below). To install Simics, see <<Install Simcis>>). Install
+other dependencies manually (or alternatively, depending on distribution and
+environment, `make -f config-user.mk install_dependencies` may do so).
 
 === Setting up the C3 simulator
 
-To setup user-space C3 environment in the PIL environment:
+To setup user-space C3 environment:
 
 [source,subs=attributes]
 ----
@@ -45,7 +47,7 @@ To setup user-space C3 environment in the PIL environment:
 mkdir -p [CC_INSTALL_DIRECTORY]
 cd -p [CC_INSTALL_DIRECTORY]
 git clone --recurse-submodules {simics-repo-url} .
-# Configure Simics project
+# Configure Simics project (add SIMICS_BIN=/some/path if needed)
 make -f config-user.mk simics_setup
 # Generate checkpoint (built upon {CKPT_NOKERNEL_BASE})
 make ckpt-cc_llvm
