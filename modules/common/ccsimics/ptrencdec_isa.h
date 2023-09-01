@@ -196,8 +196,9 @@ template <typename CpuTy, typename PETy> class PtrencdecIsa {
                    "       version:      %lu\n"
                    "       input ptr  <- 0x%016lx\n"
                    "       output ptr -> 0x%016lx",
-                   m_cpu_->read_rip(), ptr_reg, size_reg, ptr_metadata.size_,
-                   ptr_metadata.version_, ptr, ptr_encoded);
+                   m_cpu_->read_rip(), ptr_reg, size_reg,
+                   (uint64_t)ptr_metadata.size_,
+                   (uint64_t)ptr_metadata.version_, ptr, ptr_encoded);
         return CPU_Emulation_Fall_Through;
     }
 
