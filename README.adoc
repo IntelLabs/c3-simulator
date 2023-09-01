@@ -49,7 +49,7 @@ cd -p [CC_INSTALL_DIRECTORY]
 git clone --recurse-submodules {simics-repo-url} .
 # Configure Simics project (add SIMICS_BIN=/some/path if needed)
 make -f config-user.mk simics_setup
-# Generate checkpoint (built upon {CKPT_NOKERNEL_BASE})
+# Generate checkpoint (built upon {CKPT_NOKERNEL_BASE}, if available)
 make ckpt-cc_llvm
 # Build C3 Simics modules
 make -B
