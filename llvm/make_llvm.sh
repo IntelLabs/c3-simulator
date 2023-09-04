@@ -12,9 +12,9 @@ link_jobs=1
 compile_jobs="$(n=$(nproc); echo $((n-2 > 1 ? n-2 : 1)))"
 
 # Should we build and install lldb too?
-CC_LLVM_LLDB=${CC_LLVM_FULL:=0}
+CC_LLVM_LLDB=${CC_LLVM_LLDB:=0}
 
-llvm_projects="clang;clang-tools-extra;lld;compiler-rt;lldb"
+llvm_projects="clang;clang-tools-extra;lld;compiler-rt"
 llvm_runtimes="libunwind"
 [[ $CC_LLVM_LLDB == 1 ]] && llvm_projects="${llvm_projects};lldb"
 
