@@ -1,4 +1,5 @@
 = Cryptographic Capability Computing (C3) Simulator
+:toc: macro
 :source-highlighter: pygments
 :source-language: bash
 
@@ -7,7 +8,7 @@
 :simics-pkg-ver: 2023.31
 :simics-pkg-ver-stem: simics-6-packages-2023-31-linux64
 :simics-repo-url: https://github.com/IntelLabs/c3-simulator.git
-:simics-public-url: https://software.intel.com/content/www/us/en/develop/articles/simics-simulator.html.
+:simics-public-url: https://software.intel.com/content/www/us/en/develop/articles/simics-simulator.html
 :CKPT_NOKERNEL_BASE: /opt/simics/checkpoints/glibc_latest.ckpt
 :CKPT_KERNEL_BASE: /opt/simics/checkpoints/ubuntu-20.4_latest.ckpt
 :CKPT_GLIBC: checkpoints/cc_glibc.ckpt
@@ -29,7 +30,11 @@ conclusions or recommendations expressed in this material are those of the
 author(s) and do not necessarily reflect the views of the Space and Naval
 Warfare Systems Center Pacific or the Defense Advanced Research Project Agency.
 
-== Quick start
+---
+
+toc::[]
+
+== Quick Start
 
 This quick start is tested on Ubuntu 20.04. It assumes dependencies, including
 the Simics simulator, are installed, Simics is installed. To install Simics, see
@@ -162,7 +167,7 @@ pytest -v python_tests/test_unit.py --checkpoint {ckpt_llvm} --model {SIMICS_DEF
 
 To enable ICV-based intra-object tripwires, you need to use the C3-enabled
 LLVM/Clang. This can be done by using the custom clang installed on a
-C3-kernel enabled checkpoint with:
+C3-kernel enabled checkpoint with (see <<Custom kernel checkpoint>>):
 
 [source,subs=attributes]
 ----
@@ -203,7 +208,10 @@ builds.
 
 
 
-== Installation
+== Installing Simics and dependencies
+
+The dependencies and installation is for Ubuntu 20.04. For other systems you may
+have to adapt the instruction here to fit your environment.
 
 === Clone source code
 
@@ -268,7 +276,7 @@ Alternatively, you may manually install the following dependencies: bison, curl,
 flex, git, g++-8, libatk1.0-dev, libatk-bridge2.0-dev, libgtk3-dev,
 python-3-pip, pytest, and pytest-xdist.
 
-=== Initialize and build Simics project
+== Building and configuring C3 simulator and software
 
 NOTE: This section, details various build options and configuration for the C3
 simulator. Alternatively, you can follow the <<Quick Start>> to set up.
@@ -276,32 +284,8 @@ simulator. Alternatively, you can follow the <<Quick Start>> to set up.
 Most of the configuration, build, and install commands use Makefiles. You can
 use `make -n <target>` to dry-run and view commands make would execute.
 
-==== (Optional) Configure makefile targets
 
-The code listing below assume default paths, but these can be configured by
-creating a `config-local.mk` file or setting the corresponding environment
-variables. Some relevant variables and their default values are:
-
-[source,subs=attributes]
-----
-# The path to Simics installation bin directory
-SIMICS_BIN=${simics_bin}
-
-# Path for a base no-kernel checkpoint that is used as the starting point when
-# generating checkpoints without custom kernel. If not set, new checkpoints will
-# be created from scratch. Default value is ignored if path is not found.
-CKPT_NOKERNEL_BASE={ckpt_nokernel_base}
-
-# Path for checkpoint with glibc, this is generated with `make ckpt-cc_glibc`,
-# and will be a symlink to tagged checkpoint folder.
-CKPT_GLIBC={ckpt_glibc}
-
-Similar to CKPT_GLIBC, but includes llvm.
-CKPT_LLVM={ckpt_llvm}
-----
-
-
-==== Initialize Simics project files and build checkpoint
+==== Initialize Simics project files and checkpoint
 
 To initialize the Simics project and build additional dependencies, you can run
 the following commands:
@@ -327,6 +311,69 @@ make -B
 Alternatively, you can use the old `./setup_and_build.sh`, or you can use the
 `-n` dry-run flag when running make to inspect commands to run separately.
 
+=== Custom kernel checkpoint
+
+Linux dependencies are installed along with `make install_dependencies`.
+Alternatively, install the following manually: bison, dwarves, flex, libelf-dev,
+libssl-dev, and llvm.
+
+==== Create initial Ubuntu checkpoint
+
+To set up an Ubuntu checkpoint with a custom kernel, you first need to create a
+base Ubuntu checkpoint. Our scripting assumes this checkpoint is based on Ubuntu
+20.04, has the following packages installed _autoconf cmake ninja-build
+build-essential patchelf libgtest-dev_, and has the simics agent running (see
+Simics documentation). You can generate such a checkpoint using:
+
+----
+./simics -batch-mode scripts/install_ubuntu.simics
+----
+
+When done, use `write-configuration {ckpt_kernel_base}` to save a checkpoint.
+The scripts by default expect to find the checkpoint at `{ckpt_kernel_base}`,
+override `CKPT_KERNEL_BASE` in `config-local.mk` to use different path.
+
+NOTE: The script automation relies on external services and may fail in
+different environments. In this case, you may need to manually install the
+checkpoint by manually following the steps in `scripts/install_ubuntu.simics`.
+
+For troubleshooting, it is recommended to run with graphical console enabled;
+the initial boot will be in the VGA view, after which GRUB will configure the
+serial console and continue installation via that.
+
+==== Update kernel
+
+This assumes you have an initial kernel checkpoint, if not, see <<Create initial
+Ubuntu Checkpoint>> above. Once you have an initial ubuntu checkpoint (default:
+CKPT_KERNEL_BASE={ckpt_kernel_base}), you can generate a checkpoint with a
+custom kernel using:
+
+[source,subs=attributes]
+----
+# Set CKPT_KERNEL_BASE in config-local.mk if needed, (default: {ckpt_kernel})
+make ckpt-cc_kernel
+----
+
+This will create a new checkpoint at {ckpt_kernel}.GIT_SHA and create/update a
+symlink to it from {ckpt_kernel}.
+
+You can also manually update the kernel of an existing checkpoint with the
+command:
+
+----
+./simics scripts/update_ubuntu_kernel.simics \
+        checkpoint=/path/to/ubuntu_checkpoint_to_build_on.ckpt \
+        upload_llvm=TRUE \
+        upload_glibc=TRUE \
+        kernel=linux/linux.tar.gz \
+        save_checkpoint=checkpoints/new_checkpoint_name.ckpt
+----
+
+This assumes `linux.tar.gz` contains a pre-made linux source within the `src`
+directory of the package. Note, that this is not necessary if using the C3
+packaged configuration and kernel, in which case you can just run `make
+ckpt--cc_kernel` as instructed elsewhere.
+
 === Cleaning build artifacts and files
 
 ----
@@ -340,7 +387,21 @@ Neither of the commands will remove checkpoints. To do so, delete the
 checkpoints folder(s) manually. Note that checkpoints by default are incremental
 and depend on the originating checkpoint.
 
-=== Build Doxygen documentation
+=== Building LLDB with C3-coredump support
+
+To build LLDB with C3-coredump support run:
+
+----
+make make_llvm-lldb
+----
+
+This builds `llvm/llvm_install/bin/lldb`. It has C3 support for loading
+variables (and pointers) in C3 cryptographic address format, and will
+automatically read in C3 keys from a coredump file generated by a C3-enabled
+process. This requires that the coredump was generate by the C3-enabled custom
+kernel (e.g., using a cc_kernel checkpoint).
+
+=== Building Doxygen documentation
 
 The following commands create doxygen documentation for `malloc`, `crypto` and
 `modules` under `doc/doxygen`, you can browse the docs by starting from
@@ -351,49 +412,62 @@ annotations in comments in the source code files themselves.
 make documentation
 ----
 
-=== Creating checkpoint with Ubuntu and custom kernel
+=== Integrity check configuration and use
 
-Linux dependencies are installed along with `make install_dependencies`.
-Alternatively, install the following manually: bison, dwarves, flex, libelf-dev,
-libssl-dev, and llvm.
-
-==== Create initial Ubuntu checkpoint
-
-To set up an Ubuntu checkpoint with a custom kernel, you first need to create a
-base Ubuntu checkpoint. This may be attempted with an automated script, but
-instructions are also included below for manually creating the initial
-checkpoint in case the automated script fails:
-
-----
-./simics -batch-mode scripts/install_ubuntu.simics
-----
-
-When done, use `write-configuration {ckpt_kernel_base}` to save a checkpoint.
-The scripts by default expect to find the checkpoint at `{ckpt_kernel_base}`,
-override `CKPT_KERNEL_BASE` in `config-local.mk` to use different path.
-
-If the script fails, you may need to manually install Ubuntu. To do so, you can
-follow the steps found in `scripts/install_ubuntu.simics`. To troubleshoot the
-script, run with graphical console enabled; the initial boot will be in the VGA
-view, after which GRUB will configure the serial console and continue
-installation via that.
-
-==== Update kernel
-
-Once the base checkpoint is created, you should update `config-local.mk` to set
-the CKPT_KERNEL_BASE to point where your fresh Ubuntu checkpoint is, and
-CKPT_KERNEL to where you want to store your subsequent custom kernel
-checkpoints. Once done, you can use the following command to generate a
-checkpoint with a custom kernel:
+The {SIMICS_DEF_MODULE}_model has initial functional support for integrity
+checking based on ICV value bound to a virtual address and corresponding
+expected cryptographic address. By default, only writes are integrity checked,
+but exact behavior can be configured via Simics model attributes:
 
 [source,subs=attributes]
 ----
-# Set CKPT_KERNEL_BASE in config-local.mk if needed, (default: {ckpt_kernel})
-make {ckpt_kernel}
+{SIMICS_DEF_MODULE}0_0->integrity_break_on_write_mismatch = (default: FALSE)
+{SIMICS_DEF_MODULE}0_0->integrity_fault_on_write_mismatch = (default: TRUE)
+{SIMICS_DEF_MODULE}0_0->integrity_break_on_read_mismatch = (default: FALSE)
+{SIMICS_DEF_MODULE}0_0->integrity_fault_on_read_mismatch = (default: FALSE)
+{SIMICS_DEF_MODULE}0_0->integrity_warn_on_read_mismatch = (default: FALSE)
 ----
 
-This will create a new checkpoint at CKPT_KERNEL.GIT_SHA and create/update a
-symlink to it at CKPT_KERNEL.
+Kernel support for ICV handling is not implemented, hence the virtual-address
+based ICVs of one C3-enabled application may pollute the virtual addresses of
+other C3-enabled applications running within the same simulator instance. At
+present, the ICVs can be programmatically reset in the Simics shell or script
+by:
+
+[source,subs=attributes]
+----
+{SIMICS_DEF_MODULE}0_0->integrity_icv_reset = TRUE
+----
+
+Alternatively, there is a helper function:, `cc_trigger_icv_map_reset`, that can
+be used to trigger ICV reset from within the target (e.g., a program running on
+the simulation). NOTE: this functionality is exposed without access-control
+only for testing purposes.
+
+
+==== (optional) Configure makefile targets
+
+The code listing below assume default paths, but these can be configured by
+creating a `config-local.mk` file or setting the corresponding environment
+variables. Some relevant variables and their default values are:
+
+[source,subs=attributes]
+----
+# The path to Simics installation bin directory
+SIMICS_BIN=${simics_bin}
+
+# Path for a base no-kernel checkpoint that is used as the starting point when
+# generating checkpoints without custom kernel. If not set, new checkpoints will
+# be created from scratch. Default value is ignored if path is not found.
+CKPT_NOKERNEL_BASE={ckpt_nokernel_base}
+
+# Path for checkpoint with glibc, this is generated with `make ckpt-cc_glibc`,
+# and will be a symlink to tagged checkpoint folder.
+CKPT_GLIBC={ckpt_glibc}
+
+Similar to CKPT_GLIBC, but includes llvm.
+CKPT_LLVM={ckpt_llvm}
+----
 
 == Running a workload in Simics
 
@@ -517,45 +591,9 @@ You can also run individual unit tests:
 	gcc_flags="-g -gdwarf -Werror -ldl -lm -lpthread -pthread -Iinclude -Iunit_tests/include -DC3_MODEL=cc"
 ----
 
+== Misc
 
-== Model configuration
-
-=== Integrity check configuration and use
-
-The {SIMICS_DEF_MODULE}_model has initial functional support for integrity
-checking based on ICV value bound to a virtual address and corresponding
-expected cryptographic address. By default, only writes are integrity checked,
-but exact behavior can be configured via Simics model attributes:
-
-[source,subs=attributes]
-----
-{SIMICS_DEF_MODULE}0_0->integrity_break_on_write_mismatch = (default: FALSE)
-{SIMICS_DEF_MODULE}0_0->integrity_fault_on_write_mismatch = (default: TRUE)
-{SIMICS_DEF_MODULE}0_0->integrity_break_on_read_mismatch = (default: FALSE)
-{SIMICS_DEF_MODULE}0_0->integrity_fault_on_read_mismatch = (default: FALSE)
-{SIMICS_DEF_MODULE}0_0->integrity_warn_on_read_mismatch = (default: FALSE)
-----
-
-Kernel support for ICV handling is not implemented, hence the virtual-address
-based ICVs of one C3-enabled application may pollute the virtual addresses of
-other C3-enabled applications running within the same simulator instance. At
-present, the ICVs can be programmatically reset in the Simics shell or script
-by:
-
-[source,subs=attributes]
-----
-{SIMICS_DEF_MODULE}0_0->integrity_icv_reset = TRUE
-----
-
-Alternatively, there is a helper function:, `cc_trigger_icv_map_reset`, that can
-be used to trigger ICV reset from within the target (e.g., a program running on
-the simulation). NOTE: this functionality is exposed without access-control
-only for testing purposes.
-
-
-
-
-== Pre-commit hooks
+=== Pre-commit hooks
 
 To enforce coding guidelines locally, you can install pre-commit hooks that run
 tests on the staged changes before allowing a commit to pass. To enable default
