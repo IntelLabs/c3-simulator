@@ -31,11 +31,11 @@ Warfare Systems Center Pacific or the Defense Advanced Research Project Agency.
 
 == Quick start
 
-Assumes dependencies are installed, Simics is installed, and that the path to
-Simics is {SIMICS_BIN} (if not, add `SIMICS_BIN=/some/path` to the simics_setup
-make command below). To install Simics, see <<Install Simcis>>). Install
-other dependencies manually (or alternatively, depending on distribution and
-environment, `make -f config-user.mk install_dependencies` may do so).
+This quick start is tested on Ubuntu 20.04. It assumes dependencies, including
+the Simics simulator, are installed, Simics is installed. To install Simics, see
+<<Install Simcis>>). Install other dependencies manually (or alternatively,
+depending on distribution and environment, `make -f config-user.mk
+install_dependencies` may do so).
 
 === Setting up the C3 simulator
 
@@ -45,12 +45,17 @@ To setup user-space C3 environment:
 ----
 # Clone repository
 mkdir -p [CC_INSTALL_DIRECTORY]
-cd -p [CC_INSTALL_DIRECTORY]
+cd [CC_INSTALL_DIRECTORY]
 git clone --recurse-submodules {simics-repo-url} .
-# Configure Simics project (add SIMICS_BIN=/some/path if needed)
+
+# Configure Simics project with default SIMICS_BIN={SIMICS_BIN}
 make -f config-user.mk simics_setup
+# or, if needed, set SIMICS_BIN explicitly
+make -f config-user.mk simics_setup SIMICS_BIN=/some/other/path/to/simics
+
 # Generate checkpoint (built upon {CKPT_NOKERNEL_BASE}, if available)
 make ckpt-cc_llvm
+
 # Build C3 Simics modules
 make -B
 ----
@@ -231,14 +236,23 @@ tar xf {ispm-base}.tar.gz
 {ispm-base}/ispm packages --install-bundle {simics-pkg-ver-stem}.ispm --install-dir {simics-base} --non-interactive
 ----
 
-Next, launch the package manager GUI with `{ispm-base}/ispm-gui` to associate the needed addons with the Simics base package using the following steps:
+Next, launch the package manager GUI with `{ispm-base}/ispm-gui` to associate
+the needed addons with the Simics base package using the following steps:
 
 1. Click the "Addons" tab.
 2. Select "QSP-x86", "QSP-Clear-Linux", and "QSP-CPU".
 3. Client "Save updates".
 4. Close the package manager GUI.
 
-The Simics VMP module should be installed and enabled if possible to significantly accelerate simulation:
+If the addon tab is empty and you encountered a "Unable to load manifest" error
+during installation, you can to the Platforms tab and manually import the
+corresponding manifest file from the installation path.
+
+===== (optional) Install VMP kernel module
+
+The Simics VMP kernel module significantly accelerate simulation. But as is, it
+may not be compatible with your system kernel or security requirements (e.g.,
+module signing). If possible, it can be installed with:
 
 [source,subs=attributes]
 ----
@@ -255,6 +269,9 @@ flex, git, g++-8, libatk1.0-dev, libatk-bridge2.0-dev, libgtk3-dev,
 python-3-pip, pytest, and pytest-xdist.
 
 === Initialize and build Simics project
+
+NOTE: This section, details various build options and configuration for the C3
+simulator. Alternatively, you can follow the <<Quick Start>> to set up.
 
 Most of the configuration, build, and install commands use Makefiles. You can
 use `make -n <target>` to dry-run and view commands make would execute.
