@@ -19,7 +19,7 @@ typedef uint32_t u32;
 typedef uint16_t u16;
 typedef uint8_t u8;
 
-
+#define CC_SHADOW_RIP_ENABLE
 #define CC_INTEGRITY_ENABLE
 #define CC_ICV_ENABLE
 #define CC_DS_REP_MOVS_ENABLE
@@ -176,8 +176,9 @@ struct __attribute__((__packed__)) cc_context {
         } bitfield_;
         uint64_t raw_;
     } flags_;  // 64-bit flags field
-
-
+#ifdef CC_SHADOW_RIP_ENABLE
+    uint64_t shadow_rip_;
+#endif  // CC_SHADOW_RIP_ENABLE
     uint64_t reserved1_;
     data_key_bytes_t ds_key_bytes_;       // data key shared
     data_key_bytes_t dp_key_bytes_;       // data key private
@@ -650,8 +651,29 @@ template <typename T> static inline uint64_t get_ciphertext(T ptr) {
     return get_ciphertext(reinterpret_cast<uint64_t>(ptr));
 }
 
+#ifdef CC_SHADOW_RIP_ENABLE
 
+static inline void cc_ctx_set_shadow_rip_enabled(struct cc_context *ctx,
+                                                 bool shadow_rip_enabled) {
+    ctx->flags_.bitfield_.rsvd5_ = shadow_rip_enabled;
+}
 
+static inline bool cc_ctx_get_shadow_rip_enabled(const struct cc_context *ctx) {
+    return ctx->flags_.bitfield_.rsvd5_ == 1;
+}
+
+template <typename T>
+static inline void cc_ctx_set_shadow_rip(struct cc_context *ctx,
+                                         const T shadow_rip) {
+    ctx->shadow_rip_ = reinterpret_cast<uint64_t>(shadow_rip);
+}
+
+template <typename T>
+static inline T cc_ctx_get_shadow_rip(const struct cc_context *ctx) {
+    return static_cast<T>(ctx->shadow_rip_);
+}
+
+#endif  // CC_SHADOW_RIP_ENABLE
 
 #endif  // defined(__cplusplus)
 

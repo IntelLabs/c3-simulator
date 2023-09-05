@@ -9,6 +9,8 @@
 #include <simics/processor/types.h>
 #include <simics/simulator/control.h>
 #include <simics/simulator/memory.h>
+#include "ccsimics/data_encryption.h"
+#include "ccsimics/shadow_rip.h"
 #include "ccsimics/simics_util.h"
 #include "crypto/cc_encoding.h"
 
@@ -31,10 +33,14 @@ inline bool is_write(enum RW rw) { return rw == RW::WRITE; }
  */
 template <typename ConnectionTy, typename CtxTy, typename PtrEncTy>
 class C3BaseModel {
+    using SelfTy = C3BaseModel<ConnectionTy, CtxTy, PtrEncTy>;
+    using ShadowRipTy = ccsimics::ShadowRip<SelfTy, ConnectionTy, CtxTy>;
+
  protected:
     ConnectionTy *con_;
     CtxTy *ctx_;
     PtrEncTy *ptrenc_;
+    std::unique_ptr<ShadowRipTy> shadow_rip_;
 
     logical_address_t la_encoded_ = 0;
     logical_address_t la_decoded_ = 0;
@@ -51,7 +57,9 @@ class C3BaseModel {
 
  public:
     C3BaseModel(ConnectionTy *con, CtxTy *ctx, PtrEncTy *ptrenc)
-        : con_(con), ctx_(ctx), ptrenc_(ptrenc) {}
+        : con_(con), ctx_(ctx), ptrenc_(ptrenc) {
+        shadow_rip_ = std::make_unique<ShadowRipTy>(this, con, ctx);
+    }
 
     virtual inline ~C3BaseModel() = default;
 
@@ -202,6 +210,14 @@ class C3BaseModel {
         this->is_encoded_pointer_ = v;
     }
 
+    inline uint64_t encrypt_decrypt_u64(const uint64_t tweak,
+                                        const uint64_t val,
+                                        const data_key_t *k) const;
+
+    inline uint64_t encrypt_decrypt_u64(uint64_t tweak, uint64_t val) const {
+        return encrypt_decrypt_u64(tweak, val, this->ctx_->get_dp_key());
+    }
+
  protected:
     /**
      * @brief Performs address tranlation
@@ -313,11 +329,16 @@ void C3BaseModel<ConnectionTy, CtxTy, PtrEncTy>::register_callbacks(
                         mem, RW::WRITE);
             },
             static_cast<void *>(this));
+
+    shadow_rip_->register_callbacks();
 }
 
 template <typename ConnectionTy, typename CtxTy, typename PtrEncTy>
 logical_address_t C3BaseModel<ConnectionTy, CtxTy, PtrEncTy>::address_before(
         logical_address_t la, address_handle_t *handle) {
+    // Perform shadow-rip address update if needed
+    la = shadow_rip_->address_before_shim(la, handle);
+
     this->total_addr_callback_cnt_++;
     if (is_encoded_cc_ptr(la)) {
         this->is_encoded_pointer_ = true;
@@ -512,6 +533,33 @@ void C3BaseModel<ConnectionTy, CtxTy, PtrEncTy>::print_stats() {
             100.0 * (static_cast<float>(this->encoded_addr_callback_cnt_) /
                      static_cast<float>(this->total_addr_callback_cnt_));
     SIM_printf("Encoded to total ratio:         %.2f%%\n", ratio);
+}
+
+template <typename ConnectionTy, typename CtxTy, typename PtrEncTy>
+inline uint64_t C3BaseModel<ConnectionTy, CtxTy, PtrEncTy>::encrypt_decrypt_u64(
+        const uint64_t tweak, const uint64_t val, const data_key_t *k) const {
+    uint8 buff[8];
+    uint8 input_buff[8];
+    ptr_metadata_t md;
+
+    {
+        uint64_t tmp_val = val;
+        for (int i = 0; i < 8; ++i) {
+            input_buff[i] = tmp_val & 0xff;
+            tmp_val = tmp_val >> 8;
+        }
+    }
+
+    cpu_bytes_t input{.size = 8, .data = input_buff};
+
+    input.data = input_buff;
+
+    cpu_bytes_t bytes_mod = encrypt_decrypt_bytes(&md, tweak, k, input, buff);
+    uint64_t result = 0;
+    for (int i = 0; i < 8; ++i) {
+        result = result | (((uint64_t)bytes_mod.data[i]) << (i * 8));
+    }
+    return result;
 }
 
 #endif  // MODULES_COMMON_CCSIMICS_C3_BASE_MODEL_H_

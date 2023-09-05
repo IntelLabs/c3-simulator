@@ -45,6 +45,7 @@ lib
 edk2_src/Build/*
 edk2_src/Conf/*
 edk2_src/images/*
+edk2_src/logs/**/*
 linux/linux-image-*.deb
 linux/linux-headers-*.deb
 linux/linux-libc-dev_*.deb

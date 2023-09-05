@@ -376,8 +376,23 @@ class Context {
     }
 #endif  // CC_INTEGRITY_ENABLE
 
+#ifdef CC_SHADOW_RIP_ENABLE
+    inline void set_gsrip_enabled(bool val) {
+        cc_ctx_set_shadow_rip_enabled(&cc_context_, val);
+    }
 
+    inline bool get_gsrip_enabled() const {
+        return cc_ctx_get_shadow_rip_enabled(&cc_context_);
+    }
 
+    inline uint64_t get_gsrip() const {
+        return cc_ctx_get_shadow_rip<uint64_t>(&cc_context_);
+    }
+
+    inline void set_gsrip(uint64_t val) {
+        return cc_ctx_set_shadow_rip<uint64_t>(&cc_context_, val);
+    }
+#endif  // CC_SHADOW_RIP_ENABLE
 
     /**
      * @brief Debug function that dumps keys to Simics console

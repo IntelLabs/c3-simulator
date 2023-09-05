@@ -34,8 +34,7 @@ class C3Model : public C3BaseModel<ConTy, CtxTy, PtrEncTy> {
     C3Model(ConTy *con, CtxTy *ctx, PtrEncTy *ptrenc)
         : C3BaseModel<ConTy, CtxTy, PtrEncTy>(con, ctx, ptrenc) {
         rep_movs_ = std::make_unique<RepMovsIsaTy>(this, con, ctx);
-        integrity_ =
-                std::make_unique<IntegrityTy>(this, this->con_, this->ctx_);
+        integrity_ = std::make_unique<IntegrityTy>(this, con, ctx);
     }
 
     inline auto *get_integrity() { return integrity_.get(); }
