@@ -26,10 +26,12 @@ system_libgcc="/usr/lib/x86_64-linux-gnu/libgcc_s.so.1"
 # C3-specific options passed as macro defines to build
 readonly USE_CC_ISA=${USE_CC_ISA:="1"}
 readonly CC_USE_SYSCALL_SHIMS=${CC_USE_SYSCALL_SHIMS:="1"}
+readonly CC_NO_ICV_ENABLE=${CC_NO_ICV_ENABLE:="0"}
 
 readonly build_conf_string=$(cat <<EOF
 USE_CC_ISA=$USE_CC_ISA
 CC_USE_SYSCALL_SHIMS=$CC_USE_SYSCALL_SHIMS
+CC_NO_ICV_ENABLE=$CC_NO_ICV_ENABLE
 EOF
 )
 
@@ -59,6 +61,11 @@ fi
 if [[ ${CC_USE_SYSCALL_SHIMS} == "1" ]]; then
     CPPFLAGS="${CPPFLAGS} -DCC_USE_SYSCALL_SHIMS"
     CFLAGS="${CFLAGS} -DCC_USE_SYSCALL_SHIMS"
+fi
+
+if [[ ${CC_NO_ICV_ENABLE} == "1" ]]; then
+    CPPFLAGS="${CPPFLAGS} -DCC_NO_ICV_ENABLE"
+    CFLAGS="${CFLAGS} -DCC_NO_ICV_ENABLE"
 fi
 
 

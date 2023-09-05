@@ -21,7 +21,9 @@ typedef uint8_t u8;
 
 #define CC_SHADOW_RIP_ENABLE
 #define CC_INTEGRITY_ENABLE
+#ifndef CC_NO_ICV_ENABLE
 #define CC_ICV_ENABLE
+#endif
 #define CC_DS_REP_MOVS_ENABLE
 
 // Ciphers
