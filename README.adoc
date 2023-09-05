@@ -4,6 +4,7 @@
 :source-language: bash
 
 :ispm-base: intel-simics-package-manager-1.7.5
+:ispm-base-stem: intel-simics-package-manager-1.7.5-linux64
 :simics-base: /opt/simics/simics-6.0.169
 :simics-pkg-ver: 2023.31
 :simics-pkg-ver-stem: simics-6-packages-2023-31-linux64
@@ -38,9 +39,8 @@ toc::[]
 
 This quick start is tested on Ubuntu 20.04. It assumes dependencies, including
 the Simics simulator, are installed, Simics is installed. To install Simics, see
-<<Install Simcis>>). Install other dependencies manually (or alternatively,
-depending on distribution and environment, `make -f config-user.mk
-install_dependencies` may do so).
+<<Install Simics>>. To install the remaining dependencies, see
+<<Install other dependencies>>.
 
 === Setting up the C3 simulator
 
@@ -225,7 +225,7 @@ git clone --recurse-submodules {simics-repo-url}
 
 
 
-==== Install Simcis
+==== Install Simics
 
 
 
@@ -240,20 +240,21 @@ Simics:
 
 [source,subs=attributes]
 ----
-tar xf {ispm-base}.tar.gz
+tar xf {ispm-base-stem}.tar.gz
 {ispm-base}/ispm packages --install-bundle {simics-pkg-ver-stem}.ispm --install-dir {simics-base} --non-interactive
 ----
 
 Next, launch the package manager GUI with `{ispm-base}/ispm-gui` to associate
 the needed addons with the Simics base package using the following steps:
 
-1. Click the "Addons" tab.
-2. Select "QSP-x86", "QSP-Clear-Linux", and "QSP-CPU".
-3. Client "Save updates".
-4. Close the package manager GUI.
+1. When asked for the installation path for packages, enter `{simics-base}` and click "Save".
+2. Click the "Addons" tab.
+3. Select "QSP-x86", "QSP-Clear-Linux", and "QSP-CPU".
+4. Click "Save updates".
+5. Close the package manager GUI.
 
 If the addon tab is empty and you encountered a "Unable to load manifest" error
-during installation, you can to the Platforms tab and manually import the
+during installation, you can navigate to the Platforms tab and manually import the
 corresponding manifest file from the installation path.
 
 ===== (optional) Install VMP kernel module
@@ -269,12 +270,27 @@ module signing). If possible, it can be installed with:
 
 ==== Install other dependencies
 
-On Ubuntu 20.04, dependencies can be installed with `make -f config-local.mk
+On Ubuntu 20.04, initial dependencies can be installed with:
+
+----
+apt install git curl make gcc
+----
+
+The remaining dependencies can be installed with `make -f config-user.mk
 install_dependencies` (use `make -n` to dry-run, as this will use `sudo`).
 
 Alternatively, you may manually install the following dependencies: bison, curl,
 flex, git, g++-8, libatk1.0-dev, libatk-bridge2.0-dev, libgtk3-dev,
 python-3-pip, pytest, and pytest-xdist.
+
+==== Install updated cmake
+
+To build the LLVM target, the required cmake version is newer than that
+provided by Ubuntu 20.04. To build locally, use:
+
+----
+make install-cmake
+----
 
 == Building and configuring C3 simulator and software
 
