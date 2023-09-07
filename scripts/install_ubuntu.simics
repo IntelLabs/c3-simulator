@@ -130,8 +130,7 @@ $branch_id = (script-branch "install" {
 
     $sercon.bp-wait-for-console-string "proxy information"
     bp.time.wait-for $cpu 1
-    $sercon.input "http://proxy-us.intel.com:911\n"
-    echo "Using Intel proxy"
+    $sercon.input "\n"
 
     echo "Waiting to set username"
     $sercon.bp-wait-for-console-string "Full name"
