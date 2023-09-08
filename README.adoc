@@ -283,6 +283,7 @@ module signing). If possible, it can be installed with:
 
 On Ubuntu 20.04, initial dependencies can be installed with:
 
+[source,subs=attributes]
 ----
 apt install git curl make gcc
 ----
@@ -299,6 +300,7 @@ python-3-pip, pytest, and pytest-xdist.
 To build the LLVM target, the required cmake version is newer than that
 provided by Ubuntu 20.04. To build locally, use:
 
+[source,subs=attributes]
 ----
 make install-cmake
 ----
@@ -352,6 +354,7 @@ base Ubuntu checkpoint. Our scripting assumes this checkpoint is based on Ubuntu
 build-essential patchelf libgtest-dev_, and has the simics agent running (see
 Simics documentation). You can generate such a checkpoint using:
 
+[source,subs=attributes]
 ----
 ./simics -batch-mode scripts/install_ubuntu.simics
 ----
@@ -388,6 +391,7 @@ symlink to it from {ckpt_kernel}.
 You can also manually update the kernel of an existing checkpoint with the
 command:
 
+[source,subs=attributes]
 ----
 ./simics scripts/update_ubuntu_kernel.simics \
         checkpoint=/path/to/ubuntu_checkpoint_to_build_on.ckpt \
@@ -404,6 +408,7 @@ ckpt--cc_kernel` as instructed elsewhere.
 
 === Cleaning build artifacts and files
 
+[source,subs=attributes]
 ----
 # To clean only Simics modules:
 make clean
@@ -419,6 +424,7 @@ and depend on the originating checkpoint.
 
 To build LLDB with C3-coredump support run:
 
+[source,subs=attributes]
 ----
 make make_llvm-lldb
 ----
@@ -436,6 +442,7 @@ The following commands create doxygen documentation for `malloc`, `crypto` and
 `doc/doxygen/html/index.html`. The documentation is auto-generated from inline
 annotations in comments in the source code files themselves.
 
+[source,subs=attributes]
 ----
 make documentation
 ----
@@ -499,6 +506,7 @@ CKPT_LLVM={ckpt_llvm}
 
 == Running a workload in Simics
 
+[source,subs=attributes]
 ----
 ./simics [simics_args] <run_script.simics> [run_arg1=val1 run_arg2=val2 ...]
 ----
@@ -554,6 +562,7 @@ spec/scripts/generic.simics:
 
 Useful examples:
 
+[source,subs=attributes]
 ----
 ./simics scripts/runworkload_common.simics \
 	src_path=microbenchmarks \
@@ -608,6 +617,7 @@ Common options:
 
 You can also run individual unit tests:
 
+[source,subs=attributes]
 ----
 ./simics unit_tests/runtest_common.simics \
 	src_path=unit_tests/common \
@@ -627,6 +637,7 @@ To enforce coding guidelines locally, you can install pre-commit hooks that run
 tests on the staged changes before allowing a commit to pass. To enable default
 commit hooks, you can run
 
+[source,subs=attributes]
 ----
 #  To install, run:
 make pre-commit-install
