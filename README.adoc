@@ -128,8 +128,8 @@ pytest -v python_tests/test_unit.py --checkpoint {ckpt_llvm} --model {SIMICS_DEF
 === C3 integrity and intra-object tripwires
 
 The {SIMICS_DEF_MODULE}_model has initial functional support for integrity
-checking.  By default, only writes are integrity checked, see see <<Integrity
-check configuration and use>> for more details.
+checking.  By default, only writes are integrity checked, see
+<<Using C3 integrity verification>> for more details.
 
 To enable integrity support, you can pass `enable_integrity=1` to the simics
 scripts. The pytest scripts also support two pseudo modules,
@@ -140,7 +140,7 @@ with compiler-instrumented intra-object tripwires.
 
 [source,subs=attributes]
 ----
-# For single workloads:
+# For single workloads with integrity:
 ./simics scripts/runworkload_common.simics \
     src_path=microbenchmarks \
     src_file=hello.cpp \
@@ -150,7 +150,19 @@ with compiler-instrumented intra-object tripwires.
     checkpoint={CKPT_LLVM} \
     gcc_flags="-g -gdwarf -Werror -ldl -lm -lpthread -pthread -Iinclude"
 
-# For single unit tests:
+# For running pre-compiled binaries with integrity:
+clang++ microbenchmarks/hello.cpp -o a.out
+./simics scripts/runworkload_common.simics \
+    src_path=. \
+    src_file=a.out \
+    workload_name=a.out \
+    model={SIMICS_DEF_MODULE} \
+    checkpoint={CKPT_LLVM} \
+    nobuild=TRUE \
+    env_vars="LD_LIBRARY_PATH=/home/simics/glibc/glibc-2.30_install/lib:/home/simics/llvm/llvm_install/lib" \
+    enable_integrity=1
+
+# For single unit tests with integrity:
 ./simics unit_tests/runtest_common.simics \
     src_path=unit_tests/common \
     src_file=gtest_hello.cpp \
@@ -171,7 +183,7 @@ C3-kernel enabled checkpoint with (see <<Custom kernel checkpoint>>):
 
 [source,subs=attributes]
 ----
-# For stand-alone workloads
+# For stand-alone workloads with intra-object integrity:
 ./simics scripts/runworkload_common.simics \
     src_path=microbenchmarks \
     src_file=hello.cpp \
@@ -182,7 +194,7 @@ C3-kernel enabled checkpoint with (see <<Custom kernel checkpoint>>):
     compiler="/home/simics/llvm/llvm_install/bin/clang++" \
     gcc_flags="-ldl -lm -lpthread -pthread -fuse-ld=lld -finsert-intraobject-tripwires=all"
 
-# For single unit tests
+# For single unit tests with intra-object integrity:
 ./simics unit_tests/runtest_common.simics \
     src_path=unit_tests/common \
     src_file=gtest_hello.cpp \
@@ -194,7 +206,6 @@ C3-kernel enabled checkpoint with (see <<Custom kernel checkpoint>>):
     include_folders=unit_tests/include/unit_tests \
     env_vars="LD_LIBRARY_PATH=/home/simics/glibc/glibc-2.30_install/lib:/home/simics/llvm/llvm_install/lib" \
     gcc_flags="-ldl -lm -lpthread -pthread -fuse-ld=lld -finsert-intraobject-tripwires=all -Iinclude -DC3_MODEL={SIMICS_DEF_MODULE}"
-
 
 # For unit tests via pytest:
 pytest -v python_tests/test_unit.py --checkpoint {ckpt_kernel} --have-kernel --model {SIMICS_DEF_MODULE}-integrity-intra
@@ -359,8 +370,9 @@ serial console and continue installation via that.
 
 ==== Update kernel
 
-This assumes you have an initial kernel checkpoint, if not, see <<Create initial
-Ubuntu Checkpoint>> above. Once you have an initial ubuntu checkpoint (default:
+This assumes you have an initial kernel checkpoint, if not, see
+<<Create initial Ubuntu checkpoint>>.
+Once you have an initial ubuntu checkpoint (default:
 CKPT_KERNEL_BASE={ckpt_kernel_base}), you can generate a checkpoint with a
 custom kernel using:
 
@@ -428,7 +440,7 @@ annotations in comments in the source code files themselves.
 make documentation
 ----
 
-=== Integrity check configuration and use
+=== Using C3 integrity verification
 
 The {SIMICS_DEF_MODULE}_model has initial functional support for integrity
 checking based on ICV value bound to a virtual address and corresponding
