@@ -25,6 +25,9 @@ CKPT_KERNEL_BASE ?= $(wildcard /opt/simics/checkpoints/ubuntu-20.4_latest.ckpt)
 CHECKPOINT_TARGETS = $(CKPT_KERNEL) $(CKPT_LLVM) $(CKPT_GLIBC) $(CKPT_DEBUGGER)
 CHECKPOINT_TARGETS += $(CKPT_NOKERNEL_BASE) $(CKPT_KERNEL_PROT)
 
+CHECKPOINTS_TO_CLEAN = $(CKPT_KERNEL) $(CKPT_LLVM) $(CKPT_GLIBC)
+CHECKPOINTS_TO_CLEAN += $(CKPT_DEBUGGER) $(CKPT_KERNEL_PROT)
+
 SIMICS_NOKERNEL_CHECKPOINT_ARG =
 ifneq ($(CKPT_NOKERNEL_BASE),)
 	SIMICS_NOKERNEL_CHECKPOINT_ARG = checkpoint=$(CKPT_NOKERNEL_BASE)
@@ -110,6 +113,8 @@ ckpt-cc_kernel_lldb: $(CKPT_DEBUGGER)
 
 .PHONY: clean-checkpoints
 clean-checkpoints:
+	rm -f $(CHECKPOINTS_TO_CLEAN)
+	rm -rf $(addsuffix .$(ckpt_tag),$(CHECKPOINTS_TO_CLEAN))
 
+.PHONY: mrproper
 mrproper:: clean-checkpoints
-	rm -f $(CKPT_GLIBC) $(CKPT_LLVM) $(CKPT_KERNEL) $(CKPT_DEBUGGER)

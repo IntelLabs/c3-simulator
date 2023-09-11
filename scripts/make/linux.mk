@@ -24,6 +24,9 @@ linux/linux.tar.gz: make_linux
 	rm -f $@
 	cd $(dir $@) && tar czf $(notdir $@) src
 
-.PHONY: clean-linux
-mrproper::
+.PHONY: linux-mrproper
+linux-mrproper:
 	make -C linux/src -j$(shell nproc) mrproper
+
+.PHONY: mrproper
+mrproper:: linux-mrproper
