@@ -51,7 +51,7 @@ make_llvm() {
      local srcdir="${cwd}/src/llvm"
      local builddir="${cwd}/llvm_build"
 
-     rm -rf "${cwd}/llvm_install"
+     rm -rf "${cwd:?}/llvm_install"/*
      mkdir -p "${prefix}"
      mkdir -p "${builddir}"
 

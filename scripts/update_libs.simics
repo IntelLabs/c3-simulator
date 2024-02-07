@@ -153,6 +153,8 @@ script-branch "upload_and_build" {
 	@command_to_console("rm -rf malloc crypto")
 	@copy_include_folders("malloc")
 	@copy_include_folders("crypto")
+	@command_to_console("ln -s include/malloc")
+	@command_to_console("ln -s include/crypto")
 
 	if $do_glibc {
 		@command_to_console("sudo chown simics:simics -R " + simenv.glibc_dest_dir)

@@ -4,7 +4,7 @@ decl {
 	param checkpoint : string
 	param save_checkpoint : string = ""
 
-	param kernel : string = "linux/linux.tar.gz"
+	param kernel_src : string = "linux/src"
 	! Location of tarball containing Linux source, expecting the tarball to
 	! contain a single src directory with the Linux kernel sources
 
@@ -59,13 +59,12 @@ shell("mkdir -p %s" % [$save_checkpoint_dirname])
 $branch_id = (script-branch "workload" {
 	# Check variable correctness
 	local $was_real_time = (real-time-mode)
-	local $kernel_src = (lookup-file $kernel)
 	local $kernel_dst = $t_home + "/"
 	local $use_real_time = FALSE
 
 	echo "checkpoint %s" % [$checkpoint]
 	echo "save_checkpoint %s" % [$save_checkpoint]
-	echo "kernel %s" % [$kernel]
+	echo "kernel_src %s" % [$kernel_src]
 	echo "upload_glibc %d" % [$upload_glibc]
 	echo "upload_llvm %d" % [$upload_llvm]
 
@@ -89,21 +88,40 @@ $branch_id = (script-branch "workload" {
 		@upload_tarball("llvm/llvm_install")
 	}
 
-	echo "Copying kernel tarball at " + $kernel_src + " to " + $kernel_dst
-	$matic.upload $kernel_src $kernel_dst
-	$matic.wait-for-job
-
-	echo "Extracting kernel and deleting tarball"
-	@sychronizeGuestDate()
-	@command_to_console("tar xzf linux.tar.gz -m && rm linux.tar.gz")
+	#using virtiofs
+	load-module virtio-comp
+	$shared_dir_comp = (new-virtio-pcie-fs-comp share = $kernel_src tag_name = shared_dir name = $system.virtiofs2)
+	$shared_dir_comp.connect-to $system
+	echo "virtiofs: %s" % [$shared_dir_comp]
+	#reboot
+	$matic.agent-quit
+	$matic.delete-handle
+	disable-real-time-mode
+	$con.input("sudo reboot\n")
+	echo "Wating for: .*%s.*login:" % [$linux_hostname]
+	$con.bp-wait-for-console-string -regexp ".*%s.*login:" % [$linux_hostname]
+	enable-real-time-mode
+	$cpu.wait-for-time 1 -relative
+	echo "Logging in user: %s" % [$linux_user]
+	$con.input "%s\n" % [$linux_user]
+	$con.bp-wait-for-console-string "Password:"
+	$cpu.wait-for-time 1 -relative
+	echo "       password: %s" % [$linux_password]
+	$con.input "%s\n" % [$linux_password]
+	$con.bp-wait-for-console-string "$ "
 
 	echo "Installing kernel modules and image"
 	if $use_real_time { enable-real-time-mode }
 	@sychronizeGuestDate()
+	@command_to_console("mkdir -p {}".format(simenv.linux_dirname))
+	@command_to_console("sudo mount -t virtiofs shared_dir {}".format(simenv.linux_dirname))
 	@command_to_console("pushd {}".format(simenv.linux_dirname))
 	@command_to_console("sudo make modules_install")
 	@command_to_console("sudo make install")
 	@command_to_console("popd")
+	@command_to_console("sudo umount {}".format(simenv.linux_dirname))
+	$shared_dir_comp.disconnect
+	$shared_dir_comp.delete
 	if $use_real_time { disable-real-time-mode }
 
 	echo "Updating GRUB2 with temp configuration"
@@ -111,8 +129,6 @@ $branch_id = (script-branch "workload" {
 	@command_to_console("sudo update-grub")
 
 	echo "Rebooting..."
-	$matic.agent-quit
-	$matic.delete-handle
 	if $use_real_time { enable-real-time-mode }
 	@sychronizeGuestDate()
 	$con.input("sudo reboot\n")
@@ -132,10 +148,6 @@ $branch_id = (script-branch "workload" {
 	@command_to_console("sudo sed -i -E 's@^GRUB_DEFAULT.*@#GRUB_DEFAULT={}@' {}".format(simenv.grub_default, "/etc/default/grub"))
 	@command_to_console("sudo update-grub")
 
-	echo "Cleaning up linux sources"
-	@command_to_console("mv {}/vmlinux* .".format(simenv.linux_dirname))
-	@command_to_console("rm -rf {}".format(simenv.linux_dirname))
-
 	echo "Rebooting to custom kernel..."
 	if $use_real_time { enable-real-time-mode }
 	@sychronizeGuestDate()
@@ -152,7 +164,7 @@ $branch_id = (script-branch "workload" {
 
 	echo "Starting Simics agent on target"
 	$con.input("./simics_agent_x86_linux64 &\n")
-	$cpu.wait-for-time 5 -relative
+	$cpu.wait-for-time 1 -relative
 
 	echo "And, we're done, stopping..."
 	stop

@@ -66,6 +66,9 @@ make -B
 ----
 
 
+
+
+
 === Running simple workloads
 
 To run simple workloads (e.g., `microbenchmarks/hello.cpp`):
@@ -349,17 +352,14 @@ libssl-dev, and llvm.
 ==== Create initial Ubuntu checkpoint
 
 To set up an Ubuntu checkpoint with a custom kernel, you first need to create a
-base Ubuntu checkpoint. Our scripting assumes this checkpoint is based on Ubuntu
-20.04, has the following packages installed _autoconf cmake ninja-build
-build-essential patchelf libgtest-dev_, and has the simics agent running (see
-Simics documentation). You can generate such a checkpoint using:
+base Ubuntu checkpoint. You can generate such a checkpoint using:
 
 [source,subs=attributes]
 ----
-./simics -batch-mode scripts/install_ubuntu.simics
+./simics -batch-mode scripts/install_ubuntu.simics \
+        save_checkpoint={ckpt_kernel_base}
 ----
 
-When done, use `write-configuration {ckpt_kernel_base}` to save a checkpoint.
 The scripts by default expect to find the checkpoint at `{ckpt_kernel_base}`,
 override `CKPT_KERNEL_BASE` in `config-local.mk` to use different path.
 

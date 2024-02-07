@@ -53,3 +53,5 @@ linux/linux-upstream_*.diff.gz
 linux/linux-upstream_*.buildinfo
 linux/linux-upstream_*.changes
 linux/linux-upstream_*.orig.tar.gz
+scripts/docker/c3_docker.key
+scripts/docker/c3_docker.key.pub

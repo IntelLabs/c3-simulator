@@ -57,23 +57,21 @@ $(CKPT_LLVM).$(ckpt_tag): simics_setup make_llvm make_glibc-shim
 		save_checkpoint=$@
 
 # Target for creating local custom-kernel checkpoint
-$(CKPT_KERNEL).$(ckpt_tag): simics_setup make_llvm make_glibc-noshim linux/linux.tar.gz
+$(CKPT_KERNEL).$(ckpt_tag): simics_setup make_llvm make_glibc-noshim make_linux
 	$(info === Creating Simics checkpoint $@ (glibc, libunwind, linux))
 	./simics -batch-mode scripts/update_ubuntu_kernel.simics \
 		checkpoint=$(CKPT_KERNEL_BASE) \
 		upload_llvm=TRUE \
 		upload_glibc=TRUE \
-		kernel=linux/linux.tar.gz \
 		save_checkpoint=$@
 
 # Target for creating local custom-kernel checkpoint
-$(CKPT_KERNEL_PROT).$(ckpt_tag): simics_setup linux/linux.tar.gz
+$(CKPT_KERNEL_PROT).$(ckpt_tag): simics_setup make_linux
 	$(info === Creating Simics checkpoint $@ (glibc, libunwind, linux))
 	./simics -batch-mode scripts/update_ubuntu_kernel.simics \
 		checkpoint=$(CKPT_KERNEL_BASE) \
 		upload_llvm=FALSE \
 		upload_glibc=FALSE \
-		kernel=linux/linux.tar.gz \
 		save_checkpoint=$@
 
 # Target with in-guest built kernel (NOTE: very slow to build!)

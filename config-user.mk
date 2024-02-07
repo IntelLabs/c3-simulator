@@ -1,5 +1,5 @@
 # Generate absolute path in case we need it elsewher
-project_dir := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+project_dir := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 
 # Local / user config file that can be used to override some variables.
 -include config-local.mk
@@ -22,12 +22,15 @@ include scripts/make/checkpoints.mk
 include scripts/make/cmake.mk
 include scripts/make/compile_commands.mk
 include scripts/make/dependencies.mk
+include scripts/make/docker.mk
 include scripts/make/documentation.mk
 include scripts/make/glibc.mk
 include scripts/make/init_and_setup.mk
 include scripts/make/linux.mk
 include scripts/make/llvm.mk
 include scripts/make/pre-commit.mk
+
+
 
 # Use `make mrproper` to clean up build artifacts and other files.
 #

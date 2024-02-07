@@ -37,6 +37,9 @@ decl {
     ! Packages to install on the system on first boot. These are not needed for
     ! the script as such, but can be used to install packages that will need to
     ! be installed down the line anyway.
+
+    param save_checkpoint : string = ""
+    ! Filename of the checkpoint to be automatically created after installation.
 }
 
 $memory_megs = 8192
@@ -55,9 +58,14 @@ if (shell("sha256sum %s | awk  '{print $1;}'" % [$iso_image])) != $iso_image_sha
     exit
 }
 
+$cpu        = $system.mb.cpu0.core[0][0]
+$graphcon   = $system.console.con
+$sercon     = $system.serconsole.con
+$cdrom      = $system.cdrom
+
 echo "Setting up bootmedia from %s" % [$iso_image]
 $bootmedia = (new-cdrom-image file=$iso_image)
-board.cdrom.cd.insert -dvd media=$bootmedia
+$cdrom.cd.insert -dvd media=$bootmedia
 
 echo "Connecting agent disk image"
 $agent_disk_image = (lookup-file "%simics%/targets/common/images/simics_agent_binaries.img")
@@ -65,17 +73,12 @@ echo "  Found agent at %s" % [$agent_disk_image]
 $agent_disk = (new-usb-disk-from-image $agent_disk_image)
 $agent_disk.connect-to board
 
-$cpu        = $system.mb.cpu0.core[0][0]
-$graphcon   = $system.console.con
-$sercon     = $system.serconsole.con
-$cdrom      = $system.cdrom
-
 if not $console_output {
 	$system.console.con.hide
 	$con.disable-cmd-line-output
 }
 
-echo "bootmedia: %s" % [$bootmedia]
+echo "bootmedia:  %s" % [$bootmedia]
 echo "agent_disk: %s" % [$agent_disk]
 
 $branch_id = (script-branch "install" {
@@ -130,6 +133,8 @@ $branch_id = (script-branch "install" {
 
     $sercon.bp-wait-for-console-string "proxy information"
     bp.time.wait-for $cpu 1
+
+
     $sercon.input "\n"
 
     echo "Waiting to set username"
@@ -208,6 +213,7 @@ $branch_id = (script-branch "install" {
     # NOTE: not sure why this is needed
     $cdrom.cd->locked=0
     $cdrom.cd.eject
+    $bootmedia.delete
     bp.time.wait-for $cpu 5
     $sercon.input -e "Enter"
     echo "CD-ROM ejected, continuing to reboot"
@@ -244,6 +250,8 @@ $branch_id = (script-branch "install" {
     $sercon.bp-wait-for-console-string "$ "
     $sercon.input "sudo umount /mnt\n"
     $sercon.bp-wait-for-console-string "$ "
+    $agent_disk.disconnect
+    $agent_disk.delete
 
     echo "Starting simics agent in guest"
 	$sercon.input "./simics_agent_x86_linux64 &\n"
@@ -254,4 +262,17 @@ $branch_id = (script-branch "install" {
 
     stop
     disable-real-time-mode
+
+    if $save_checkpoint != "" {
+        $save_checkpoint_dirname = (shell("dirname %s" % [$save_checkpoint]))
+        echo "Creating checkpoint directory at %s" % [$save_checkpoint_dirname]
+        shell("mkdir -p %s" % [$save_checkpoint_dirname])
+        echo "Done creating checkpoint directory"
+
+        echo "Creating the checkpoint at %s" % [$save_checkpoint]
+        write-configuration $save_checkpoint
+        echo "Done creating the checkpoint"
+    } else {
+        echo "Checkpoint creation skipped. Use save_checkpoint=<path> to enable."
+    }
 })

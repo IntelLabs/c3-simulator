@@ -219,7 +219,7 @@ $branch_id = (script-branch "workload" {
 	#     Compile & run           #
 	###############################
 	# Add custom LLVM to path
-	@command_to_console('export PATH=home/simics/llvm/llvm_install/bin:$PATH')
+	@command_to_console('export PATH=/home/simics/llvm/llvm_install/bin:$PATH')
 
 	if not defined obj_files {
 		$obj_files = $src_file

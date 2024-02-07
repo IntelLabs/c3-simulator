@@ -26,6 +26,16 @@ $(FILES_TO_DECOMPRESS) : % : %.zst
 .PHONY: decompress
 decompress: $(FILES_TO_DECOMPRESS)
 
+.PHONY: install-pre-push-hook
+install-pre-push-hook:
+	[ ! -f .git/hooks/pre-push ] || cp .git/hooks/pre-push .git/hooks/pre-push.backup
+	cp scripts/git/hooks/pre-push .git/hooks/pre-push
+
+.PHONY: remove-pre-push-hook
+remove-pre-push-hook:
+	[ ! -f .git/hooks/pre-push ] || cp .git/hooks/pre-push .git/hooks/pre-push.backup
+	rm .git/hooks/pre-push
+
 install_dependencies_ubuntu::
 	$(info === Depencencies for decompressing large files)
 	sudo apt install -y \

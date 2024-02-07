@@ -38,8 +38,8 @@ EOF
 # Clean build and install directory if C3-specific configuration has changed
 if ! [[ -e $build_conf ]] || [[ "$(cat "$build_conf")" != "$build_conf_string" ]]; then
     echo "Deleting old glibc build and install directory"
-    rm -rf "$glibc_build"
-    rm -rf "$glibc_install"
+    rm -rf "${glibc_build:?}"/*
+    rm -rf "${glibc_install:?}"/*
 fi
 
 cd "${cwd}"
@@ -49,9 +49,18 @@ mkdir -p glibc-2.30_build
 # Store configuration so we we can clean if this changes
 echo "$build_conf_string" > "$build_conf"
 
+C_COMPILER=${C_COMPILER:="gcc-9"}
+
 CPPFLAGS=${CPPFLAGS:=""}
 CPPFLAGS="${CPPFLAGS} -I${cwd}/../malloc -DCC"
 CFLAGS="-fcf-protection=none -g -O2"
+if [[ $C_COMPILER == "gcc-10" ]]; then
+    CFLAGS+=" -Wno-error=zero-length-bounds"
+    CFLAGS+=" -Wno-error=maybe-uninitialized"
+elif [[ $C_COMPILER == "gcc-11" ]]; then
+    # Flags to build with GCC 11
+    CFLAGS+=" -Wno-error=array-parameter -Wno-error=stringop-overflow -Wno-error=zero-length-bounds -Wno-error=stringop-overread -Wno-error=maybe-uninitialized -Wno-error=array-bounds"
+fi
 
 if [[ ${USE_CC_ISA} == "1" ]]; then
     CPPFLAGS="${CPPFLAGS} -DUSE_CC_ISA"
@@ -72,8 +81,10 @@ fi
 cd glibc-2.30_build
 ./../src/configure prefix="${prefix}" \
         --enable-multi-arch=no \
+        --without-selinux \
         CPPFLAGS="${CPPFLAGS}" \
-        CFLAGS="${CFLAGS}"
+        CFLAGS="${CFLAGS}" \
+        CC="$C_COMPILER"
 
 make ${jobs}
 

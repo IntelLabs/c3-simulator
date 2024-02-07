@@ -19,6 +19,11 @@ make_linux: linux/src/.config
 linux/src/.config: linux/default_config
 	cp -f $< $@
 
+linux-config: linux/src/.config
+	make -C linux/src oldconfig
+	make -C linux/src prepare
+	make -C linux/src scripts
+
 linux/linux.tar.gz: make_linux
 	$(info === Package Linux kernel)
 	rm -f $@
