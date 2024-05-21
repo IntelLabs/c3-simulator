@@ -1,0 +1,25 @@
+# Copyright 2016-2024 Intel Corporation
+# SPDX-License-Identifier: MIT
+
+decl {
+    param br_images : string = "%simics%/risc-v/buildroot/output/images"
+    param sercon : string = "board.console.con"
+}
+
+# Load the RISC-V Simics target
+(load-target target = "risc-v-simple/linux"
+    machine:software:firmware:bl_image = "%s/fw_jump.elf" % $br_images
+    machine:software:linux:kernel_image = "%s/Image" % $br_images
+    machine:software:linux:rootfs_disk_image = "%s/rootfs.ext2" % $br_images
+)
+
+script-branch "Start networking before Linux login" {
+    $sercon.bp-wait-for-console-string "Welcome to Buildroot"
+    stop
+    echo "=== Enabling networking and connecting to real network"
+    enable-real-time-mode
+    connect-real-network target-ip = 10.10.0.100
+    run
+}
+
+run

@@ -54,6 +54,7 @@ endif
 -include scripts/make/linux.mk
 -include scripts/make/llvm.mk
 -include scripts/make/pre-commit.mk
+-include scripts/make/risc-v.mk
 -include scripts/make/tests.mk
 
 # ENV vars added by Simics Makefiles (i.e., used by the Simics build)
