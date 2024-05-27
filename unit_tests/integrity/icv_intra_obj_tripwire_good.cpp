@@ -23,7 +23,7 @@ typedef struct _charVoid {
     void *voidThird;
 } charVoid;
 
-TEST(Integrity, test_icv_rep_movs_juliet_good) {
+TEST(Integrity, icv_intra_obj_tripwire_good) {
     if (!is_model("native")) {
         cc_set_icv_enabled(true);
     }

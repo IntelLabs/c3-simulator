@@ -38,6 +38,9 @@ decl {
 
 	param exit : bool = FALSE
 	param system : string = board
+
+	param upload_unit_tests : bool = FALSE
+	param unit_tests_dir : string = "unit_tests"
 }
 
 if $checkpoint != "" {
@@ -78,6 +81,7 @@ echo "buildmode: %s" % [$buildmode]
 echo "llvm_buildmode: %s" % [$llvm_buildmode]
 echo "glibc_buildmode: %s" % [$glibc_buildmode]
 echo "build_env: %s" % [$build_env]
+echo "upload_unit_tests: %s" % [$upload_unit_tests]
 
 $save_checkpoint_dirname = (shell("dirname %s" % [$save_checkpoint]))
 echo "Going to create %s" % [$save_checkpoint_dirname]
@@ -100,6 +104,7 @@ script-branch "upload_and_build" {
 	################################################
 	#     Upload install or source files files     #
 	################################################
+
 
 	# Upload installs or source files
 	if $do_glibc {
@@ -134,6 +139,15 @@ script-branch "upload_and_build" {
 			matic0.upload ("llvm/" + $llvm_build_script) $glibc_dest_dir
 			matic0.wait-for-job
 		}
+	}
+
+	# Upload the unit tests if requested
+	if $upload_unit_tests {
+		echo "Uploading unit tests files"
+		@upload_tarball(simenv.unit_tests_dir)
+		@command_to_console("rm -f temp.tar")
+		@command_to_console("mkdir -p include")
+		@command_to_console("ln -s /home/simics/unit_tests/include/unit_tests include/unit_tests")
 	}
 
 	#####################################

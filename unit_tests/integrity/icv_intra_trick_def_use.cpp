@@ -1,4 +1,5 @@
 // model: *
+// nomodel: zts -castack -zts
 // simics_args: enable_integrity=1
 
 #include <gtest/gtest.h>

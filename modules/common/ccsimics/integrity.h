@@ -37,6 +37,8 @@ template <typename CcTy, typename ConTy, typename CtxTy> class Integrity final {
     static const bool kTrace = false;
     // Unconditionally enable debug messages for this class
     static constexpr bool kDebugAlways = false;
+    static constexpr bool kUsePhysicalMapForICVs = true;
+    static constexpr bool kIgnoreICVBreakOnReadLA = false;
 
     CcTy *const cc_;
     ConTy *const con_;
@@ -173,9 +175,25 @@ template <typename CcTy, typename ConTy, typename CtxTy> class Integrity final {
     void set_suppress_icv_mode(INTEGRITY_SUPPRESS_MODE mode);
 
     /**
+     * @brief Internal implementation of Setting ICV to INIT
+     */
+    void initICV(uint64_t ca);
+
+    /**
+     * @brief Internal implementation of Setting ICV to PREINIT
+     */
+    void preInitICV(uint64_t ca);
+
+    /**
      * @brief Internal implementation of invalitdating of an ICV ISA
      */
-    void invalidateICV(uint64_t ca);
+    void invalidate_icv(uint64_t ca);
+
+    /**
+     * @brief Internal implementation of initializing memory location to value
+     * and setting ICV of an ICV ISA
+     */
+    void initialize_icv(uint64_t ca, uint64_t val);
 
     /**
      * @brief Internal implementation of copying ICV map entries
@@ -226,6 +244,13 @@ template <typename CcTy, typename ConTy, typename CtxTy> class Integrity final {
     }
 
  private:
+    /**
+     * @brief Get the icv index for LA
+     *
+     * @param address
+     */
+    inline uint64_t get_icv_index(const uint64_t la) const;
+
     /**
      * @brief Check ICV, return true if performed ICV correction
      */
@@ -283,12 +308,13 @@ void Integrity<CcTy, ConTy, CtxTy>::set_suppress_icv_mode(
 }
 
 template <typename CcTy, typename ConTy, typename CtxTy>
-void Integrity<CcTy, ConTy, CtxTy>::invalidateICV(uint64_t ptr) {
+void Integrity<CcTy, ConTy, CtxTy>::invalidate_icv(uint64_t ptr) {
     // check ca
     const auto is_ca = is_encoded_cc_ptr(ptr);
     if (is_ca) {
         auto la = this->cc_->decode_pointer(ptr);
-        auto icv_index = la >> SLOT_SIZE_IN_BITS;
+        const auto icv_index = get_icv_index(la);
+        ASSERT_MSG(icv_index != ~0UL, "ICV fetch LA to PA translation failed");
 
         auto this_icv = is_ca ? (icv_t)(ptr & ICV_ADDR_MASK) : 0;
         auto stored_icv = get_icv(icv_index);
@@ -296,7 +322,6 @@ void Integrity<CcTy, ConTy, CtxTy>::invalidateICV(uint64_t ptr) {
         if (this_icv == stored_icv) {
             // ICV's match expected ca allow invalidation
             this->icv_map_->set(icv_index, ~0);
-
         } else {
             // mismatched ICV,
             if (icv_fault_on_write_mismatch()) {
@@ -305,38 +330,76 @@ void Integrity<CcTy, ConTy, CtxTy>::invalidateICV(uint64_t ptr) {
             }
         }
     } else {
+        SIM_printf("invalidate_icv: not a CA used for invalidation: (%lx).\n",
+                   ptr);
         if (debug_on()) {
-            SIM_printf(
-                    "invalidateICV: not a CA used for invalidation: (%lx).\n",
-                    ptr);
             SIM_break_simulation("break on non CA used for invicv.");
-        } else {
-            ASSERT_FMT(
-                    is_ca,
-                    "invalidateICV: not a CA used for invalidation: (%lx).\n",
-                    ptr);
         }
+        this->con_->gp_fault(0, false, "invalidate_icv");
+    }
+}
+
+template <typename CcTy, typename ConTy, typename CtxTy>
+void Integrity<CcTy, ConTy, CtxTy>::initialize_icv(uint64_t ca, uint64_t val) {
+    // check ca
+    const auto is_ca = is_encoded_cc_ptr(ca);
+    if (is_ca) {
+        auto la = this->cc_->decode_pointer(ca);
+        const auto icv_index = get_icv_index(la);
+        ASSERT_MSG(icv_index != ~0UL, "ICV fetch LA to PA translation failed");
+
+        if (!this->con_->disable_data_encryption) {
+            cpu_bytes_t bytes;
+            bytes.size = 8;
+            bytes.data = reinterpret_cast<uint8_t *>(&val);
+            uint8 bytes_buffer[64];
+            uint64_t data_tweak = this->cc_->get_data_tweak(ca);
+            cpu_bytes_t bytes_mod = this->cc_->encrypt_decrypt_data(
+                    nullptr, data_tweak, bytes, bytes_buffer);
+            uint64_t enc_val =
+                    *(reinterpret_cast<const uint64_t *>(bytes_mod.data));
+            this->con_->write_mem_8B(la, enc_val);
+
+        } else {
+            this->con_->write_mem_8B(la, val);
+        }
+
+        set_icv(icv_index, ca, RW::WRITE);
+
+    } else {
+        SIM_printf("initialize_icv: not a CA used for invalidation: (%lx).\n",
+                   ca);
+        if (debug_on()) {
+            SIM_break_simulation("break on non CA used for invicv.");
+        }
+        this->con_->gp_fault(0, false, "initialize_icv");
     }
 }
 
 template <typename CcTy, typename ConTy, typename CtxTy>
 void Integrity<CcTy, ConTy, CtxTy>::copyICVs(uint64_t dst, uint64_t src,
                                              size_t n, bool backwards) {
+    auto la_to_icv_i = [this](uint64_t la, size_t i, bool back) {
+        const uint64_t icv_index =
+                get_icv_index(back ? la - (i << SLOT_SIZE_IN_BITS)
+                                   : la + (i << SLOT_SIZE_IN_BITS));
+        ASSERT_MSG(icv_index != ~0UL, "ICV fetch LA to PA translation failed");
+        return icv_index;
+    };
+
     const auto la_dst =
             is_encoded_cc_ptr(dst) ? this->cc_->decode_pointer(dst) : dst;
-    auto icv_index_dst = la_dst >> SLOT_SIZE_IN_BITS;
 
     const auto la_src =
             is_encoded_cc_ptr(src) ? this->cc_->decode_pointer(src) : src;
-    auto icv_index_src = la_src >> SLOT_SIZE_IN_BITS;
 
     // Need to get number of ICV entries
     // N = (ALIGN_DOWN(src) - ALIGN_UP(src + n)) / SLOT_SIZE
-    size_t aligned_src = src & (~0 << SLOT_SIZE_IN_BITS);
-    size_t aligned_dst = dst & (~0 << SLOT_SIZE_IN_BITS);
-    size_t aligned_src_end = (src + n + (1 << SLOT_SIZE_IN_BITS) - 1) &
+    size_t aligned_src = la_src & (~0 << SLOT_SIZE_IN_BITS);
+    size_t aligned_dst = la_dst & (~0 << SLOT_SIZE_IN_BITS);
+    size_t aligned_src_end = (la_src + n + (1 << SLOT_SIZE_IN_BITS) - 1) &
                              (~0 << SLOT_SIZE_IN_BITS);
-    size_t aligned_dst_end = (dst + n + (1 << SLOT_SIZE_IN_BITS) - 1) &
+    size_t aligned_dst_end = (la_dst + n + (1 << SLOT_SIZE_IN_BITS) - 1) &
                              (~0 << SLOT_SIZE_IN_BITS);
     size_t src_icv_n = (aligned_src_end - aligned_src) >> SLOT_SIZE_IN_BITS;
     size_t dst_icv_n = (aligned_dst_end - aligned_dst) >> SLOT_SIZE_IN_BITS;
@@ -358,42 +421,88 @@ void Integrity<CcTy, ConTy, CtxTy>::copyICVs(uint64_t dst, uint64_t src,
         size_t i;
         // Need to get number of ICV entries
         // N = (ALIGN_DOWN(src - n) - ALIGN_UP(src)) / SLOT_SIZE
-        aligned_src = (src - n) & (~0 << SLOT_SIZE_IN_BITS);
-        aligned_dst = (dst - n) & (~0 << SLOT_SIZE_IN_BITS);
-        aligned_src_end = (src + (1 << SLOT_SIZE_IN_BITS) - 1) &
+        aligned_src = (la_src - n) & (~0 << SLOT_SIZE_IN_BITS);
+        aligned_dst = (la_dst - n) & (~0 << SLOT_SIZE_IN_BITS);
+        aligned_src_end = (la_src + (1 << SLOT_SIZE_IN_BITS) - 1) &
                           (~0 << SLOT_SIZE_IN_BITS);
-        aligned_dst_end = (dst + (1 << SLOT_SIZE_IN_BITS) - 1) &
+        aligned_dst_end = (la_dst + (1 << SLOT_SIZE_IN_BITS) - 1) &
                           (~0 << SLOT_SIZE_IN_BITS);
         src_icv_n = (aligned_src_end - aligned_src) >> SLOT_SIZE_IN_BITS;
         dst_icv_n = (aligned_dst_end - aligned_dst) >> SLOT_SIZE_IN_BITS;
         for (i = 0; i < src_icv_n && i < dst_icv_n; i++) {
-            auto val = this->icv_map_->get(icv_index_src--);
-            ifdbgprint(dbg(), "val = %lu\n", val);
+            auto val = this->icv_map_->get(la_to_icv_i(la_src, i, backwards));
             auto new_icv = dst_to_icv(dst, i, val, backwards);
-            this->icv_map_->set(icv_index_dst--, new_icv);
+            this->icv_map_->set(la_to_icv_i(la_dst, i, backwards), new_icv);
         }
         // Handle case where dst is unaligned -> has more ICV entries than src
         if (src_icv_n < dst_icv_n) {
-            auto val = this->icv_map_->get(icv_index_src + 1);
+            auto val = this->icv_map_->get(la_to_icv_i(la_src, 1, !backwards));
             auto new_icv = dst_to_icv(dst, i, val, backwards);
-            this->icv_map_->set(icv_index_dst, new_icv);
+            this->icv_map_->set(la_to_icv_i(la_dst, i, backwards), new_icv);
             i++;
         }
         ifdbgprint(dbg(), "backwards copied %lu ICV entries (n = %lu)\n", i, n);
     } else {
         size_t i;
         for (i = 0; i < src_icv_n && i < dst_icv_n; i++) {
-            auto val = this->icv_map_->get(icv_index_src++);
+            auto val = this->icv_map_->get(la_to_icv_i(la_src, i, backwards));
             auto new_icv = dst_to_icv(dst, i, val, backwards);
-            this->icv_map_->set(icv_index_dst++, new_icv);
+            this->icv_map_->set(la_to_icv_i(la_dst, i, backwards), new_icv);
         }
         // Handle case where dst is unaligned -> has more ICV entries than src
         if (src_icv_n < dst_icv_n) {
-            auto val = this->icv_map_->get(icv_index_src - 1);
+            auto val = this->icv_map_->get(la_to_icv_i(la_src, 1, !backwards));
             auto new_icv = dst_to_icv(dst, i, val, backwards);
-            this->icv_map_->set(icv_index_dst, new_icv);
+            this->icv_map_->set(la_to_icv_i(la_dst, i, backwards), new_icv);
+            i++;
         }
         ifdbgprint(dbg(), "copied %lu ICV entries\n", i);
+    }
+}
+
+template <typename CcTy, typename ConTy, typename CtxTy>
+void Integrity<CcTy, ConTy, CtxTy>::preInitICV(uint64_t ptr) {
+    // check ca
+    const auto is_ca = is_encoded_cc_ptr(ptr);
+    if (is_ca) {
+        auto la = this->cc_->decode_pointer(ptr);
+        const auto icv_index = get_icv_index(la);
+        ASSERT_MSG(icv_index != ~0UL, "ICV fetch LA to PA translation failed");
+
+        auto stored_icv = get_icv(icv_index);
+
+        // Realloc changes the size of an allocation, without touching the
+        // existing allocation, as stated in the manual page:
+        //
+        //     The realloc() function changes the size of the memory block
+        //     pointed to by ptr to  size bytes.  The contents will be
+        //     unchanged in the range from the start of the region up to the
+        //     minimum of the old and new sizes.  If the new size is larger
+        //     than  the  old  size, the added memory will not be initialized.
+        //
+        // If we set the entire allocation to PREINIT (and de-initialized it),
+        // granules that have been previously initialized will loose their
+        // initialization status. Thus, do not touch granules that already have
+        // PREINIT set.
+        if ((stored_icv & ICV_PREINIT_MASK) == ICV_PREINIT_MASK)
+          return;
+
+        // Set the PREINIT bit.
+        ifdbgprint(dbg(), "Setting PREINIT bit.");
+        stored_icv = stored_icv | ICV_PREINIT_MASK;
+
+        // All memory allocations start with the least significant bits of the
+        // ICV as zeros. Since the INIT bit has inverted polarity, i.e. since
+        // zero means initialized, memory allocations start as initialized.
+        // Thus, the PreInitICV instruction de-initializes the memory granule,
+        // so that detection can occur.
+        stored_icv = ICV_UNINITIALIZE(stored_icv);
+
+        this->icv_map_->set(icv_index, stored_icv);
+    } else {
+        // XXX: REVIEW
+        SIM_printf("preInitICV: not a CA: (%lx).\n", ptr);
+        SIM_break_simulation("break on non CA used for PreInitICV.");
     }
 }
 
@@ -434,6 +543,24 @@ inline void Integrity<CcTy, ConTy, CtxTy>::check_integrity(memory_handle_t *mem,
 }
 
 template <typename CcTy, typename ConTy, typename CtxTy>
+inline uint64_t
+Integrity<CcTy, ConTy, CtxTy>::get_icv_index(const uint64_t la) const {
+    ASSERT_MSG(!is_encoded_cc_ptr(la), "CA passed to get_icv_index");
+
+    if (!kUsePhysicalMapForICVs) {
+        return (la >> SLOT_SIZE_IN_BITS);
+    }
+    const auto pa_block = con_->logical_to_physical(la, Sim_Access_Read);
+
+    if (pa_block.valid == 0) {
+        // This currently naively assumes that if an address cannot be
+        // translated, then we are already dealing with a PA.
+        return (uint64_t)(la >> SLOT_SIZE_IN_BITS);
+    }
+    return (uint64_t)(pa_block.address >> SLOT_SIZE_IN_BITS);
+}
+
+template <typename CcTy, typename ConTy, typename CtxTy>
 inline void Integrity<CcTy, ConTy, CtxTy>::set_icv(uint64_t icv_index,
                                                    uint64_t ca, enum RW rw) {
     if (rw == RW::READ)
@@ -463,7 +590,11 @@ Integrity<CcTy, ConTy, CtxTy>::set_or_check_icv(logical_address_t la,
     if (!is_enabled()) {
         return false;
     }
-    auto icv_index = la >> SLOT_SIZE_IN_BITS;
+    const auto icv_index = get_icv_index(la);
+    if (icv_index == ~0UL) {
+        // End here if we couldn't determine a valid ICV index
+        return false;
+    }
     if (this->ctx_->get_icv_lock() == true) {
         return this->check_icv(icv_index, ca, rw);
     } else {
@@ -541,7 +672,7 @@ inline bool Integrity<CcTy, ConTy, CtxTy>::check_icv(uint64_t icv_index,
     auto this_icv = is_ca ? (icv_t)(ca & ICV_ADDR_MASK) : 0;
     auto stored_icv = get_icv(icv_index);
 
-    if (this_icv == stored_icv) {
+    if ((ICV_ADDR_MASK & this_icv) == (ICV_ADDR_MASK & stored_icv)) {
         this->is_icv_failure_ = false;
     } else {
         static uint64_t warning_count = 0;
@@ -563,22 +694,22 @@ inline bool Integrity<CcTy, ConTy, CtxTy>::check_icv(uint64_t icv_index,
         }
 
         if (rw != RW::READ) {
-            if (icv_fault_on_write_mismatch()) {
-                SIM_printf("Fault on write ICV fail\n");
-                this->con_->gp_fault(0, false, "write ICV fail");
-            }
             if (icv_break_on_write_mismatch()) {
                 SIM_printf("Break on ICV fail\n");
                 SIM_break_simulation("ICV fail");
             }
+            if (icv_fault_on_write_mismatch()) {
+                SIM_printf("Fault on write ICV fail\n");
+                this->con_->gp_fault(0, false, "write ICV fail");
+            }
         } else {
+            if (icv_break_on_read_mismatch() && !kIgnoreICVBreakOnReadLA) {
+                SIM_printf("Break on ICV fail\n");
+                SIM_break_simulation("ICV fail");
+            }
             if (icv_fault_on_read_mismatch()) {
                 SIM_printf("Fault on read ICV fail\n");
                 this->con_->gp_fault(0, false, "read ICV fail");
-            }
-            if (icv_break_on_read_mismatch() && is_ca) {
-                SIM_printf("Break on ICV fail\n");
-                SIM_break_simulation("ICV fail");
             }
         }
         this->is_icv_failure_ = true;
@@ -590,6 +721,24 @@ inline bool Integrity<CcTy, ConTy, CtxTy>::check_icv(uint64_t icv_index,
             return true;
         }
     }
+
+    // PREINIT logic
+    //
+    // When the PREINIT flag is set, automatically initialize the granule on
+    // memory writes.
+    if (IS_ICV_PREINIT_ENABLED(stored_icv)) {
+        if (rw == RW::WRITE) {
+            stored_icv = ICV_INITIALIZE(stored_icv);
+            this->icv_map_->set(icv_index, stored_icv);
+        }
+    }
+    //
+    // On memory reads, check that the INIT state is initialized.
+    if (rw == RW::READ) {
+        if (IS_ICV_UNINITIALIZED(stored_icv))
+            SIM_printf("Read from Uninitialized memory at %lx.\n", ca);
+    }
+
     return false;
 }
 
@@ -603,7 +752,11 @@ Integrity<CcTy, ConTy, CtxTy>::_do_icv_correction(const ca_t ca,
     ASSERT(icv_correct_ca_on_fail());
     const bool is_ca = is_encoded_cc_ptr(ca);
 
-    const auto icv_index = la >> SLOT_SIZE_IN_BITS;
+    const auto icv_index = get_icv_index(la);
+    if (icv_index == ~0UL) {
+        // End here if we couldn't determine a valid ICV index
+        return ca;
+    }
     const auto this_icv = is_ca ? (icv_t)(ca.uint64_ & ICV_ADDR_MASK) : 0;
     const auto stored_icv = get_icv(icv_index);
 

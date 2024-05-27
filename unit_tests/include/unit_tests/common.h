@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
 
 #include <atomic>
 #include <stdexcept>
@@ -35,6 +36,25 @@
 #endif
 #define define_to_str(val) _define_to_str(val)
 #define _define_to_str(val) #val
+
+#define ALL_REGISTERS_CLOBBER_NO_RBP                                           \
+    "rax", "rdi", "rsi", "rdx", "rcx", "rbx", "r8", "r9", "r10", "r11", "r12", \
+            "r13", "r14", "r15"
+
+#define ALL_REGISTERS_CLOBBER ALL_REGISTERS_CLOBBER_NO_RBP, "rbp"
+
+#define spill_all_regs()                                                       \
+    do {                                                                       \
+        __asm__ __volatile__("nop" : : : "memory", ALL_REGISTERS_CLOBBER);     \
+    } while (0)
+
+#define spill_all_regs_except_rbp()                                            \
+    do {                                                                       \
+        __asm__ __volatile__("nop"                                             \
+                             :                                                 \
+                             :                                                 \
+                             : "memory", ALL_REGISTERS_CLOBBER_NO_RBP);        \
+    } while (0)
 
 constexpr const char *const c3_model = define_to_str(C3_MODEL);
 
@@ -78,8 +98,7 @@ typedef struct {
     } while (0)
 #endif
 
-static inline bool
-have_cc_heap_encoding() {
+static inline bool have_cc_heap_encoding() {
     void *tmp = malloc(1);
     bool r = is_encoded_cc_ptr(tmp);
     free(tmp);

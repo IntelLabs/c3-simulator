@@ -34,8 +34,6 @@ static void cc_pre_real_free_clear_icv(void *ptr) {
 }
 
 
-
-
 static void *quarantine_buffers[QUARANTINE_WIDTH][QUARANTINE_DEPTH] = {0};
 static int quarantine_current_buffer = 0;
 static int quarantine_current_index = 0;
@@ -47,8 +45,6 @@ static int quarantine_current_index = 0;
 void quarantine_buffer_free(int buf_index) {
     kprintf(stderr, "QUARANTINE: Freeing buffer %d\n", buf_index);
     for (int i = 0; i < QUARANTINE_DEPTH; i++) {
-
-
         cc_pre_real_free_clear_icv(quarantine_buffers[buf_index][i]);
         REAL_FREE(quarantine_buffers[buf_index][i]);
     }
@@ -60,8 +56,6 @@ void quarantine_buffer_free(int buf_index) {
 //   if the buffers are full.
 void quarantine_insert(void *ptr) {
     if (!cc_quarantine_enabled) {
-
-
         cc_pre_real_free_clear_icv(ptr);
         REAL_FREE(ptr);
         return;
@@ -79,8 +73,6 @@ void quarantine_insert(void *ptr) {
 }
 
 
-
-
 static uint8_t curr_version = 0;
 
 void assign_version(uint64_t ptr, size_t size, ptr_metadata_t *ptr_metadata) {
@@ -90,16 +82,12 @@ void assign_version(uint64_t ptr, size_t size, ptr_metadata_t *ptr_metadata) {
 }
 
 void *cc_malloc_encoded(size_t size) {
-
-
     void *ptr = REAL_MALLOC(size);
     if (!ptr)
         return NULL;
     // kprintf(stderr, "GLIBC WRAPPER: original malloc(%d) pointer =%p\n", (int)
     // size, ptr);
     size_t malloc_size = MALLOC_USABLE_SIZE(ptr);
-
-
     ptr_metadata_t ptr_metadata = {0};
     void *p_encoded;
     if (try_box((uint64_t)ptr, malloc_size, &ptr_metadata)) {
@@ -112,8 +100,6 @@ void *cc_malloc_encoded(size_t size) {
 #endif  // !USE_CC_ISA
     } else {
         p_encoded = ptr;
-
-
     }
 #ifdef CC_ICV_ENABLE
     // Setup ICV for allocation
@@ -126,14 +112,10 @@ void *cc_malloc_encoded(size_t size) {
 
 void *cc_calloc_encoded(size_t num, size_t size) {
     size_t total_size = num * size;
-
-
     void *ptr = REAL_MALLOC(total_size);
     if (!ptr)
         return NULL;
     size_t malloc_size = MALLOC_USABLE_SIZE(ptr);
-
-
     ptr_metadata_t ptr_metadata = {0};
     void *p_encoded;
     if (try_box((uint64_t)ptr, malloc_size, &ptr_metadata)) {
@@ -146,8 +128,6 @@ void *cc_calloc_encoded(size_t num, size_t size) {
 #endif  // !USE_CC_ISA
     } else {
         p_encoded = ptr;
-
-
     }
 
 #ifdef CC_ICV_ENABLE
@@ -167,8 +147,6 @@ void *cc_calloc_encoded(size_t num, size_t size) {
 }
 
 void *cc_realloc_encoded(void *p_old_encoded, size_t size) {
-
-
     void *p_old_decoded;
     size_t size_old;
     if (is_encoded_cc_ptr((uint64_t)p_old_encoded)) {
@@ -178,11 +156,7 @@ void *cc_realloc_encoded(void *p_old_encoded, size_t size) {
         p_old_decoded =
                 (void *)decode_pointer((uint64_t)p_old_encoded, &pointer_key);
 #endif  // USE_CC_ISA
-
-
         size_t old_malloc_size = MALLOC_USABLE_SIZE(p_old_decoded);
-
-
         // Min of size implied by encoded pointer and implied by glibc metadata
         size_old = min_size(get_size_in_bytes((uint64_t)p_old_encoded),
                             old_malloc_size);
@@ -191,8 +165,6 @@ void *cc_realloc_encoded(void *p_old_encoded, size_t size) {
         size_old = MALLOC_USABLE_SIZE(p_old_encoded);
     }
     size_t size_to_alloc = size;
-
-
     void *p_new_decoded = REAL_MALLOC(size_to_alloc);
     if (!p_new_decoded)
         return NULL;  // POSIX Compliance: Realloc returns NULL if the
@@ -200,8 +172,6 @@ void *cc_realloc_encoded(void *p_old_encoded, size_t size) {
                       // freed/altered
 
     size_t new_malloc_size = MALLOC_USABLE_SIZE(p_new_decoded);
-
-
     ptr_metadata_t ptr_metadata = {0};
     void *p_new_encoded;
     if (try_box((uint64_t)p_new_decoded, new_malloc_size, &ptr_metadata)) {
@@ -215,8 +185,6 @@ void *cc_realloc_encoded(void *p_old_encoded, size_t size) {
 #endif  // USE_CC_ISA
     } else {
         p_new_encoded = p_new_decoded;
-
-
     }
 
 #ifdef CC_ICV_ENABLE
@@ -237,12 +205,8 @@ void *cc_realloc_encoded(void *p_old_encoded, size_t size) {
     }
 #endif
 
-
-
     cc_pre_real_free_clear_icv(p_old_decoded);
     REAL_FREE(p_old_decoded);
-
-
     kprintf(stderr, "***** cc_realloc *****\n");
     kprintf(stderr, "p_old_encoded=0x%016lx\n", (uint64_t)p_old_encoded);
     kprintf(stderr, "p_old_decoded=0x%016lx\n", (uint64_t)p_old_decoded);
@@ -262,8 +226,6 @@ void cc_free_encoded(void *p_in) {
         uint64_t ptr64 = decode_pointer((uint64_t)p_in, &pointer_key);
 #endif  // USE_CC_ISA
         ptr = (void *)ptr64;
-
-
     } else {
         ptr = p_in;
     }

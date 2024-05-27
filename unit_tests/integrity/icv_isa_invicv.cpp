@@ -1,8 +1,10 @@
 // model: cc
-// nomodel: c3
+// nomodel: zts -zts -castack
 // simics_args: disable_cc_env=1 enable_integrity=1
 
 // NOTE: Kernel support not yet extended to Integrity
+
+// #define DEBUG
 
 #include <gtest/gtest.h>
 #include "malloc/cc_globals.h"
@@ -30,6 +32,7 @@ TEST(Integrity, test_isa_inv_icv) {
 
     // Set ICV for allocation
     if (!is_model("native")) {
+        dbgprint("Setting ICV for 0x%016lx (0x%016lx)", ca, la);
         cc_set_icv(ca, size);
     }
 
@@ -41,6 +44,7 @@ TEST(Integrity, test_isa_inv_icv) {
 
     // Clear ICV
     if (!is_model("native")) {
+        dbgprint("Clearing ICV for 0x%016lx (0x%016lx)", ca, cc_isa_decptr(ca));
         cc_set_icv(cc_isa_decptr(ca), size);
     }
 

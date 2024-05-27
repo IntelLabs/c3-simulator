@@ -53,6 +53,37 @@ static inline int convert_xed_reg_to_simics(xed_reg_enum_t xed_reg) {
     }
 }
 
+static inline bool is_out_instr(xed_iclass_enum_t c) {
+    return (c == XED_ICLASS_OUT || c == XED_ICLASS_OUTSB ||
+            c == XED_ICLASS_OUTSD || c == XED_ICLASS_OUTSW);
+}
+
+static inline bool is_in_instr(xed_iclass_enum_t c) {
+    return (c == XED_ICLASS_IN);
+}
+
+static inline bool is_jmp_instr(xed_iclass_enum_t c,
+                                const bool inc_conditional_jumps = false) {
+    if (c == XED_ICLASS_JMP || c == XED_ICLASS_JMP_FAR) {
+        return true;
+    }
+
+    if (inc_conditional_jumps &&
+        (c == XED_ICLASS_JMP || c == XED_ICLASS_JMP_FAR || c == XED_ICLASS_JB ||
+         c == XED_ICLASS_JBE || c == XED_ICLASS_JCXZ || c == XED_ICLASS_JECXZ ||
+         c == XED_ICLASS_JL || c == XED_ICLASS_JLE || c == XED_ICLASS_JMP ||
+         c == XED_ICLASS_JMP_FAR || c == XED_ICLASS_JNB ||
+         c == XED_ICLASS_JNBE || c == XED_ICLASS_JNL || c == XED_ICLASS_JNLE ||
+         c == XED_ICLASS_JNO || c == XED_ICLASS_JNP || c == XED_ICLASS_JNS ||
+         c == XED_ICLASS_JNZ || c == XED_ICLASS_JO || c == XED_ICLASS_JP ||
+         c == XED_ICLASS_JRCXZ || c == XED_ICLASS_JS || c == XED_ICLASS_JZ ||
+         c == XED_ICLASS_JNZ)) {
+        return true;
+    }
+
+    return false;
+}
+
 static inline void dump_xedd(const xed_decoded_inst_t *decoded_inst) {
     char buf[kDumpBufLen];
     xed_decoded_inst_dump(decoded_inst, buf, kDumpBufLen);

@@ -42,7 +42,7 @@ typedef uint8_t u8;
     } while (0)
 #endif
 
-#define BITMASK(x) (0xFFFFFFFFFFFFFFFF >> (64 - (x)))
+#define C3_BITMASK(x) (0xFFFFFFFFFFFFFFFF >> (64 - (x)))
 
 #define MAGIC_LIT_START 1
 #define MAGIC_LIT_END 2
@@ -57,7 +57,7 @@ typedef uint8_t u8;
 
 #define CC_STACK_ID_VAL 0x3e
 
-#define KEY_SIZE(cipher)                                                       \
+#define C3_KEY_SIZE(cipher)                                                       \
     (((cipher) == BIPBIP_CIPHER) ? 32 : ((cipher) == ASCON_CIPHER) ? 16 : -1)
 
 #define KEY_SCHEDULE_SIZE(cipher) (((cipher) == ASCON_CIPHER) ? 16 : -1)
@@ -72,21 +72,18 @@ typedef uint8_t u8;
 
 #define CIPHER_OFFSET_BITS 3
 
-typedef uint8_t pointer_key_bytes_t[KEY_SIZE(CC_POINTER_CIPHER)];
+typedef uint8_t pointer_key_bytes_t[C3_KEY_SIZE(CC_POINTER_CIPHER)];
 typedef struct {
     int size_;
-    uint8_t bytes_[KEY_SIZE(CC_POINTER_CIPHER)];
+    uint8_t bytes_[C3_KEY_SIZE(CC_POINTER_CIPHER)];
 } pointer_key_t;
 
-typedef uint8_t data_key_bytes_t[KEY_SIZE(CC_DATA_CIPHER)];
+typedef uint8_t data_key_bytes_t[C3_KEY_SIZE(CC_DATA_CIPHER)];
 typedef uint8_t data_key_schedule_t[KEY_SCHEDULE_SIZE(CC_DATA_CIPHER)];
 typedef struct {
     int size_;
-    uint8_t bytes_[KEY_SIZE(CC_DATA_CIPHER)];
+    uint8_t bytes_[C3_KEY_SIZE(CC_DATA_CIPHER)];
 } data_key_t;
-
-
-
 
 
 // INTRA-object magic value
@@ -113,7 +110,7 @@ typedef struct {
 #define VERSION_OFFSET (CIPHERTEXT_OFFSET + CIPHERTEXT_SIZE - VERSION_SIZE)
 #define SIZE_OFFSET (CIPHERTEXT_OFFSET + CIPHERTEXT_SIZE)
 
-#define FMASK 0xFFFFFFFFFFFFFFFFULL
+#define C3_FMASK 0xFFFFFFFFFFFFFFFFULL
 
 #define BOX_PAD_FOR_STRLEN_FIX 48
 
@@ -163,11 +160,17 @@ typedef struct {
 } ca_t;
 
 #define CTX_UNUSED_BITS 57
-
-struct __attribute__((__packed__)) cc_context {
+#ifdef CC_SHADOW_RIP_ENABLE
+#undef CTX_UNUSED_BITS
+#define CTX_UNUSED_BITS 56
+#endif  // CC_SHADOW_RIP_ENABLE
+typedef struct __attribute__((__packed__)) cc_context {
     union {
         struct {
             uint64_t unused_ : CTX_UNUSED_BITS;
+#ifdef CC_SHADOW_RIP_ENABLE
+            uint64_t shadow_rip_enabled_ : 1;
+#endif  // CC_SHADOW_RIP_ENABLE
             uint64_t rsvd6_ : 1;
             uint64_t rsvd5_ : 1;
             uint64_t rsvd4_ : 1;
@@ -186,7 +189,12 @@ struct __attribute__((__packed__)) cc_context {
     data_key_bytes_t dp_key_bytes_;       // data key private
     data_key_bytes_t c_key_bytes_;        // code key
     pointer_key_bytes_t addr_key_bytes_;  // address / pointer key
-};
+} cc_context_t;
+
+typedef struct __attribute__((__packed__)) cc_core_info {
+    struct cc_context cc_context;
+    size_t stack_rlimit_cur;
+} cc_core_info_t;
 
 typedef ca_t canonical_pointer_t;
 typedef ca_t cc_pointer_t;
@@ -201,6 +209,59 @@ typedef ca_t cc_pointer_t;
  * @brief Mask to get ICV slot base address
  */
 #define ICV_ADDR_MASK 0xFFFFFFFFFFFFFFF8
+/**
+ * @brief Mask to get INIT bit from the ICV
+ */
+#define ICV_INIT_MASK 0x0000000000000002
+/**
+ * @brief Mask to get PREINIT bit from the ICV
+ */
+#define ICV_PREINIT_MASK 0x0000000000000004
+
+/*
+ * Macros to set and get the initialization state within an ICV
+ *
+ * Notice how it the polarity is inverted:
+ *   0 = initialized
+ *   1 = uninitilized
+ */
+/**
+ * @brief Macro to set initialization state to INITIALIZED
+ */
+#define ICV_INITIALIZE(x) (x & (~ICV_INIT_MASK))
+/**
+ * @brief Macro to set initialization state to UNINITIALIZED
+ */
+#define ICV_UNINITIALIZE(x) (x | ICV_INIT_MASK)
+/**
+ * @brief Yields TRUE if the ICV has been initialized
+ */
+#define IS_ICV_INITIALIZED(x) ((x & ICV_INIT_MASK) == 0)
+/**
+ * @brief Yields TRUE if the ICV has not been initialized
+ */
+#define IS_ICV_UNINITIALIZED(x) ((x & ICV_INIT_MASK) == ICV_INIT_MASK)
+
+/*
+ * Macros to set and get PREINIT enabled bit
+ *
+ * When PREINIT is enabled, writes to a memory granule automatically promote it
+ * to the INITIALIZED state. Conversely, when it is disabled, a granule can
+ * only migrate from the UNINITIALIZED to the INITIALIZED state with an
+ * explicit InitICV instruction.
+ */
+/**
+ * @brief Yields TRUE if ICV has PREINIT semantics enabled; FALSE when disabled
+ */
+#define IS_ICV_PREINIT_ENABLED(x) ((x & ICV_PREINIT_MASK) == ICV_PREINIT_MASK)
+/**
+ * @brief Macro to enable PREINIT semantics
+ */
+#define ICV_PREINIT_ENABLE(x) (x | ICV_PREINIT_MASK)
+/**
+ * @brief Macro to disable PREINIT semantics
+ */
+#define ICV_PREINIT_DISABLE(x) (x & (~ICV_PREINIT_MASK))
 
 /**
  * @brief Fixed size used to iniialize internal BIOS map
@@ -214,10 +275,6 @@ typedef uint64_t icv_t;
 
 #endif  // CC_INTEGRITY_ENABLE
 
-#ifndef _CC_GLOBALS_NO_INCLUDES_
-#include "try_box.h"  // NOLINT (NOTE: This depend on the above defines)
-#endif
-
 static inline ca_t get_ca_t(uint64_t ptr) {
     ca_t ca;
     ca.uint64_ = ptr;
@@ -225,7 +282,7 @@ static inline ca_t get_ca_t(uint64_t ptr) {
 }
 
 static inline uint64_t get_low_canonical_bits(uint64_t pointer) {
-    return pointer & (FMASK >> (64 - TOP_CANONICAL_BIT_OFFSET - 1));
+    return pointer & (C3_FMASK >> (64 - TOP_CANONICAL_BIT_OFFSET - 1));
 }
 
 static inline cc_pointer_t *convert_to_cc_ptr(uint64_t *pointer) {
@@ -254,11 +311,12 @@ static inline uint64_t get_plaintext(uint64_t pointer) {
 }
 
 static inline uint64_t get_tweak_mask(uint8_t size) {
-    return (FMASK << (size + MIN_ALLOC_OFFSET - 1));
+    return (C3_FMASK << (size + MIN_ALLOC_OFFSET - 1));
 }
 
 static inline int is_canonical(uint64_t pointer) {
-    return (pointer == get_low_canonical_bits(pointer)) ? 1 : 0;
+    const uint64_t high = pointer >> (TOP_CANONICAL_BIT_OFFSET);
+    return high == 0 || high == (C3_FMASK >> (TOP_CANONICAL_BIT_OFFSET));
 }
 
 static inline size_t decode_size(uint8_t size_encoded) {
@@ -269,6 +327,26 @@ static inline size_t decode_size(uint8_t size_encoded) {
 static inline size_t get_size_in_bytes(uint64_t pointer) {
     uint8_t size_encoded = ca_get_size(pointer);
     return decode_size(size_encoded);
+}
+
+/**
+ * @brief Get the tweak bits from a given CA
+ */
+static inline uint64_t ca_get_tweak_bits_u64(uint64_t ptr) {
+    return ptr & get_tweak_mask(get_ca_t(ptr).enc_size_);
+}
+
+/**
+ * @brief Get largest possible offset given input pointer CA power-slot
+ *
+ * Note that this only checks the bounds in terms of CA power-slots, which may
+ * or may not match the underlying in-memory object's bounds.
+ */
+static inline size_t ca_get_inbound_offset(const void *ptr, const size_t i) {
+    const uint64_t u64_ptr = (uint64_t)((uintptr_t)ptr);
+    const uint64_t mask = ~get_tweak_mask(get_ca_t(u64_ptr).enc_size_);
+    const uint64_t max = mask - (mask & u64_ptr);
+    return (i < max ? i : max);
 }
 
 static inline uint64_t mask_n_lower_bits(uint64_t val, int n) {
@@ -283,7 +361,7 @@ static inline uint64_t mask_n_lower_bits(uint64_t val, int n) {
  */
 static inline int is_encoded_cc_ptr(const uint64_t ptr) {
     const ca_t ca = get_ca_t(ptr);
-    return (ca.enc_size_ == 0x0 || ca.enc_size_ == BITMASK(SIZE_SIZE)) ? 0 : 1;
+    return (ca.enc_size_ == 0x0 || ca.enc_size_ == C3_BITMASK(SIZE_SIZE)) ? 0 : 1;
 }
 
 /**
@@ -313,8 +391,8 @@ static inline uint64_t cc_isa_encptr(uint64_t ptr, const ptr_metadata_t *md) {
         ".byte 0x48			\n"
         ".byte 0x01			\n"
         ".byte 0xc8         \n"
-        : [ ptr ] "+a"(ptr)
-        : [ md ] "c"((uint64_t)md->uint64_)
+        : [ptr] "+a"(ptr)
+        : [md] "c"((uint64_t)md->uint64_)
         :);
     return ptr;
 }
@@ -324,7 +402,7 @@ static inline uint64_t cc_isa_decptr(uint64_t pointer) {
         ".byte 0x48			\n"
         ".byte 0x01			\n"
         ".byte 0xc0         \n"
-        : [ ptr ] "+a"(pointer)
+        : [ptr] "+a"(pointer)
         :
         :);
     return pointer;
@@ -336,9 +414,30 @@ static inline void cc_isa_invicv(uint64_t pointer) {
                  ".byte 0x2B			\n"
                  ".byte 0xc0         \n"
                  :
-                 : [ ptr ] "a"(pointer)
+                 : [ptr] "a"(pointer)
                  :);
 }
+
+static inline void cc_isa_initicv(const uint64_t ptr, const uint64_t data) {
+    asm volatile(".byte 0xf0             \n"
+                 ".byte 0x48             \n"
+                 ".byte 0x21             \n"
+                 ".byte 0xc8             \n"
+                 :
+                 : [ptr] "a"(ptr), [val_ptr] "c"(data)
+                 :);
+}
+
+static inline void cc_isa_preiniticv(const uint64_t ptr) {
+    asm volatile(".byte 0xf0             \n"
+                 ".byte 0x48             \n"
+                 ".byte 0x21             \n"
+                 ".byte 0xc0             \n"
+                 :
+                 : [ptr] "a"(ptr)
+                 :);
+}
+
 /**
  * @brief Saves current C3 state into given cc_context buffer
  *
@@ -368,8 +467,6 @@ static inline int cc_ctx_get_cc_enabled(const struct cc_context *ctx) {
 static inline void cc_ctx_set_cc_enabled(struct cc_context *ctx, int val) {
     ctx->flags_.bitfield_.cc_enabled_ = val;
 }
-
-
 
 
 #ifdef CC_INTEGRITY_ENABLE
@@ -451,11 +548,11 @@ static inline void cc_trigger_icv_map_reset(void) {
  * @brief Sets ICV for a memory range and zeroes memory
  */
 static inline void cc_set_icv_and_zero(void *addr, size_t size) {
-    uint64_t uptr = (uint64_t)addr;
-    const uint64_t end = uptr + size;
+    char *uptr = (char *)addr;
+    char *const end = uptr + size;
     cc_set_icv_lock(0);
     for (; uptr < end; uptr += sizeof(char)) {
-        *((char *)uptr) = 0;
+        *uptr = 0;
     }
     cc_set_icv_lock(1);
 }
@@ -464,14 +561,14 @@ static inline void cc_set_icv_and_zero(void *addr, size_t size) {
  * @brief Sets ICV for a memory range but keeps memory content
  */
 static inline void cc_set_icv(void *addr, size_t size) {
-    uint64_t uptr = (uint64_t)addr;
-    const uint64_t end = uptr + size;
+    char *uptr = (char *)addr;
+    char *const end = uptr + size;
     cc_set_icv_lock(0);
     for (; uptr < end; uptr += sizeof(char)) {
         __asm__ volatile("mov (%[ptr]), %%al  \n"
                          "mov %%al, (%[ptr])  \n"
                          :
-                         : [ ptr ] "r"(uptr)
+                         : [ptr] "r"(uptr)
                          : "memory", "rax");
     }
     cc_set_icv_lock(1);
@@ -573,6 +670,10 @@ static inline T cc_isa_encptr(T ptr, const ptr_metadata_t *md) {
     return (T)cc_isa_encptr((uint64_t)ptr, md);
 }
 
+#ifndef _CC_GLOBALS_NO_INCLUDES_
+
+static inline uint64_t cc_isa_encptr_sv(uint64_t p, size_t s, uint8_t v);
+
 /**
  * @brief Call C3 ISA after preparing metadata based on function arguments.
  *
@@ -584,16 +685,9 @@ static inline T cc_isa_encptr(T ptr, const ptr_metadata_t *md) {
  */
 template <typename T>
 static inline T cc_isa_encptr(T ptr, size_t size, uint8_t version = 0) {
-    ptr_metadata_t md = {0};
-    if (!try_box((uint64_t)ptr, size, &md)) {
-#ifndef _CC_GLOBALS_NO_INCLUDES_
-        assert(false && "Try box failed");
-#endif  // _CC_GLOBALS_NO_INCLUDES_
-        return (T) nullptr;
-    }
-    md.version_ = version;
-    return (T)cc_isa_encptr(ptr, &md);
+    return (T)cc_isa_encptr_sv((uint64_t)ptr, size, version);
 }
+#endif  // _CC_GLOBALS_NO_INCLUDES_
 
 /**
  * @brief Call C3 ISA to invalidate given pointer using provided metadata
@@ -604,6 +698,15 @@ static inline T cc_isa_encptr(T ptr, size_t size, uint8_t version = 0) {
  */
 template <typename T> static inline void cc_isa_invicv(T ptr) {
     cc_isa_invicv((uint64_t)ptr);
+}
+
+template <typename P, typename D>
+static inline void cc_isa_initicv(const P ptr, const D data) {
+    cc_isa_initicv((const uint64_t)ptr, (const uint64_t)data);
+}
+
+template <typename P> static inline void cc_isa_preiniticv(P ptr) {
+    cc_isa_preiniticv((const uint64_t)ptr);
 }
 
 /**
@@ -677,6 +780,18 @@ static inline T cc_ctx_get_shadow_rip(const struct cc_context *ctx) {
 
 #endif  // CC_SHADOW_RIP_ENABLE
 
+template <typename T> static inline uint64_t ca_get_tweak_bits(T ptr) {
+    return ca_get_tweak_bits_u64(reinterpret_cast<uint64_t>(ptr));
+}
+
+#else  // !defiend(__cplusplus)
+
+#define ca_get_tweak_bits(ptr) (ca_get_tweak_bits_u64((uint64_t)ptr))
+
 #endif  // defined(__cplusplus)
+
+#ifndef _CC_GLOBALS_NO_INCLUDES_
+#include "try_box.h"  // NOLINT (NOTE: This depend on the above defines)
+#endif
 
 #endif  // MALLOC_CC_GLOBALS_H_

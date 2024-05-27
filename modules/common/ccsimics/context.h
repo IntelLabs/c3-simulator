@@ -64,6 +64,8 @@ class Context {
     static constexpr access_t kRwAccess =
             (access_t)(Sim_Access_Read | Sim_Access_Write);
 
+    static constexpr bool kTrace = false;
+
     typedef struct cc_context context_t;
 
     static constexpr const bool kFixedSharedKey = false;
@@ -93,10 +95,11 @@ class Context {
                           .addr_key_bytes_ = DEF_ADDR_KEY_BYTES};
 
     SimicsConnection *con_;
-    CCPointerEncoding *const m_ptrenc_;
+    CCPointerEncodingBase *const m_ptrenc_;
 
  public:
-    inline explicit Context(SimicsConnection *con, CCPointerEncoding *ptrenc)
+    inline explicit Context(SimicsConnection *con,
+                            CCPointerEncodingBase *ptrenc)
         : con_(con), m_ptrenc_(ptrenc) {
         cc_context_.flags_.raw_ = 0;
         init_addr_key(&addr_key_);
@@ -151,6 +154,16 @@ class Context {
      * @return const data_key_t*
      */
     inline const data_key_t *get_c_key() const { return &c_key_; }
+
+    /**
+     * @brief Get the data key for given CA
+     *
+     * @return const data_key_t*
+     */
+    virtual inline const data_key_t *get_data_key(const uint64_t ca) const {
+        return get_dp_key();
+    }
+
     /**
      * @brief Get the address/pointer key
      *
@@ -203,8 +216,27 @@ class Context {
      * @return cpu_emulation_t
      */
     inline virtual cpu_emulation_t save_context() {
-        const uint64_t rax_val = con_->read_rax();
-        con_->write_mem(rax_val, rax_val + sizeof(struct cc_context),
+        uint8_t local_buff[sizeof(struct cc_context)];
+        const uint64_t rax = con_->read_rax();
+        const uint64_t addr = m_ptrenc_->decode_pointer_if_encoded(rax);
+
+        ifdbgprint(kTrace, "Writing C3 context into 0x%016lx (at IP: 0x%016lx)",
+                   addr, con_->read_rip());
+
+        // Save/load via temporary buffer if I/O buffer is encrypted
+        uint8_t *buff = is_encoded_cc_ptr(rax)
+                                ? reinterpret_cast<uint8_t *>(local_buff)
+                                : reinterpret_cast<uint8_t *>(&cc_context_);
+
+        if (is_encoded_cc_ptr(rax)) {
+            // Encrypt internal cc_context into temp buffer
+            CCDataEncryption::encrypt_decrypt_many_bytes(
+                    addr, get_data_key(addr),
+                    reinterpret_cast<uint8_t *>(&cc_context_), buff,
+                    sizeof(struct cc_context));
+        }
+
+        con_->write_mem(addr, addr + sizeof(struct cc_context),
                         reinterpret_cast<char *>(&cc_context_));
 
         return CPU_Emulation_Fall_Through;
@@ -218,9 +250,28 @@ class Context {
      * @return cpu_emulation_t
      */
     inline virtual cpu_emulation_t load_context() {
-        const uint64_t rax_val = con_->read_rax();
-        con_->read_mem(rax_val, rax_val + sizeof(struct cc_context),
-                       reinterpret_cast<char *>(&cc_context_));
+        uint8_t local_buff[sizeof(struct cc_context)];
+        const uint64_t rax = con_->read_rax();
+        const uint64_t addr = m_ptrenc_->decode_pointer_if_encoded(rax);
+
+        ifdbgprint(kTrace, "Loading C3 context from 0x%016lx (at IP: 0x%016lx)",
+                   addr, con_->read_rip());
+
+        // Save/load via temporary buffer if I/O buffer is encrypted
+        uint8_t *buff = is_encoded_cc_ptr(rax)
+                                ? reinterpret_cast<uint8_t *>(local_buff)
+                                : reinterpret_cast<uint8_t *>(&cc_context_);
+
+        con_->read_mem(addr, addr + sizeof(struct cc_context),
+                       reinterpret_cast<char *>(buff));
+
+        if (is_encoded_cc_ptr(rax)) {
+            // Decrypt temp buffer into internal cc_context
+            CCDataEncryption::encrypt_decrypt_many_bytes(
+                    addr, get_data_key(addr),
+                    reinterpret_cast<uint8_t *>(&cc_context_), buff,
+                    sizeof(struct cc_context));
+        }
 
         set_data_key(&dp_key_, cc_context_.dp_key_bytes_);
         set_data_key(&c_key_, cc_context_.c_key_bytes_);
@@ -394,6 +445,7 @@ class Context {
     }
 #endif  // CC_SHADOW_RIP_ENABLE
 
+
     /**
      * @brief Debug function that dumps keys to Simics console
      *
@@ -411,6 +463,8 @@ class Context {
         SIM_printf("%-20s: %s\n", "c_key_.bytes_\n",
                    buf_to_hex_string(c_key_.bytes_, kDataKeyBytesSize).c_str());
     }
+
+    virtual inline void dump_context() const;
 
  private:
     /**
@@ -447,6 +501,8 @@ class Context {
                 cl, "c3_context",
                 [](auto *, auto *obj, auto *) -> attr_value_t {
                     auto *con = reinterpret_cast<ConTy *>(SIM_object_data(obj));
+                    if (con->debug_on)
+                        con->ctx_->dump_context();
                     return con->ctx_->get_attr_data();
                 },
                 nullptr,
@@ -455,6 +511,22 @@ class Context {
                     return con->ctx_->set_from_attr_data(val);
                 },
                 nullptr, Sim_Attr_Optional, "d", NULL, "c3_context data");
+#ifdef CC_SHADOW_RIP_ENABLE
+        SIM_register_typed_attribute(
+                cl, "gsrip_enabled",
+                [](auto *, auto *obj, auto *) -> attr_value_t {
+                    auto *con = reinterpret_cast<ConTy *>(SIM_object_data(obj));
+                    return SIM_make_attr_boolean(
+                            con->ctx_->get_gsrip_enabled());
+                },
+                nullptr,
+                [](auto *, auto *obj, auto *val, auto *) -> set_error_t {
+                    auto *con = reinterpret_cast<ConTy *>(SIM_object_data(obj));
+                    con->ctx_->set_gsrip_enabled(SIM_attr_boolean(*val));
+                    return Sim_Set_Ok;
+                },
+                nullptr, Sim_Attr_Optional, "b", NULL, "Shadow-rip enabled");
+#endif  // CC_SHADOW_RIP_ENABLE
     }
 
  private:
@@ -480,6 +552,22 @@ class Context {
                   "bad constants");
     static_assert(kAddrKeyBytesSize == sizeof(pointer_key_bytes_t),
                   "bad constants");
+};
+
+inline void Context::dump_context() const {
+    dump_keys();
+#ifdef CC_SHADOW_RIP_ENABLE
+    SIM_printf("%-20s: %d\n", "gsrip_enabled", get_gsrip_enabled());
+    SIM_printf("%-20s: 0x%016lx\n", "gsrip", get_gsrip());
+#endif  // CC_SHADOW_RIP_ENABLE
+}
+
+template <typename ConTy> class ContextFinal final : public Context {
+ public:
+    inline explicit ContextFinal(ConTy *con, CCPointerEncodingBase *ptrenc)
+        : Context(con, ptrenc) {}
+
+    virtual inline ~ContextFinal() = default;
 };
 
 #endif  // MODULES_COMMON_CCSIMICS_CONTEXT_H_

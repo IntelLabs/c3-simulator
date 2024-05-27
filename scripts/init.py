@@ -101,6 +101,14 @@ def copy_include_folders(folders):
         parent_dir = os.path.dirname(path)
         dir = os.path.basename(path)
 
+        # Python's os.path.basename differs from Linux's basename when the last
+        # item in the path is a directory. On Linux, it returns the directory
+        # itself; whereas on Python, the empty string. Feeding an empty string
+        # to the tar command will result in an empty tarball (or an error
+        # message complaining about the empty list of files to tar).
+        if not dir:
+            dir = '.'
+
         c_flag = ""
         if parent_dir:
             c_flag = f"-C {parent_dir}"
@@ -111,3 +119,10 @@ def copy_include_folders(folders):
         run_command("matic0.wait-for-job")
         run_command(f"! rm -f '{tarball_path}'")
         command_to_console(f"tar -mxf ~/{tarball_fn} -C ~/include")
+
+def assert_msg(test, msg):
+    if not (test):
+        print("!!!! Assertion failed:\n")
+        print(msg)
+        print("\nquitting...")
+        sys.exit(3);

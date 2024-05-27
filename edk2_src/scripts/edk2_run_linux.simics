@@ -1,0 +1,246 @@
+# Copyright 2024 Intel Corporation
+# SPDX-License-Identifier: MIT
+decl {
+    param kernel : string
+    param virtio_rootfs : string
+    param kernel_cmdline : string
+
+    param bios : string = "%simics%/edk2_src/Build/SimicsOpenBoardPkg/BoardX58Ich10/DEBUG_GCC5/FV/BOARDX58ICH10.fd"
+
+    param user : string = "simics"
+    param password : string = "simics"
+    param prompt : string = "$ "
+
+    param system : string = "qsp"
+
+    param model : string = "c3"
+
+    param enable_c3 : int = 1
+    param enable_integrity : int = 0
+    param disable_ptrenc : int = 0
+    param disable_data_encryption : int = 0
+    param debug_on : int = 0
+    param do_quit : int = 0
+    param magic : int = 0
+
+    param logfile : string = "edk2_src/log/eval1_edk2"
+
+    param gdb_port : int = 0
+    param connect_real_network : int = 0
+    param break_on_exception : int = 0
+    param break_on_integrity_fault : int = 0
+
+    param set_prefix : bool = TRUE
+
+    param do_run : bool = TRUE
+
+    param parse_log_globals : bool = TRUE
+
+    param edk2_run_linux_sh : string = "%simics%/edk2_src/scripts/edk2_run_linux.sh"
+}
+
+if $set_prefix { output-radix 16 }
+
+$bios = (lookup-file $bios)
+
+if $connect_real_network != 0 {
+    (load-target qsp-x86/user-provided-linux
+        network:service_node:connect_real_network="napt"
+        machine:hardware:firmware:bios=$bios
+        machine:software:linux:kernel=$kernel
+        machine:software:linux:virtio_rootfs=$virtio_rootfs
+        machine:software:linux:cmdline=$kernel_cmdline)
+} else {
+    (load-target qsp-x86/user-provided-linux
+        machine:hardware:firmware:bios=$bios
+        machine:software:linux:kernel=$kernel
+        machine:software:linux:virtio_rootfs=$virtio_rootfs
+        machine:software:linux:cmdline=$kernel_cmdline)
+}
+
+$cpu        = $system.mb.cpu0.core[0][0]
+$graphcon   = $system.console.con
+$sercon     = $system.serconsole.con
+
+if $enable_c3 == 1 {
+    if $model == "cc" {
+        $cc = "%s_0" % [(new-cc-model -connect-all)]
+    } else if $model == "c3" {
+        $cc = "%s_0" % [(new-c3-model -connect-all)]
+    } else {
+        echo "Unknown model '%s'" % [$model]
+    }
+    $cc->gsrip_enabled = TRUE
+
+    if $enable_integrity == 1 {
+        $cc->integrity = TRUE
+        $cc->integrity_warn_on_read_mismatch   = TRUE
+        $cc->integrity_fault_on_write_mismatch = TRUE
+        $cc->integrity_fault_on_read_mismatch  = TRUE
+        if $break_on_integrity_fault == 1 {
+            $cc->integrity_break_on_write_mismatch = TRUE
+            $cc->integrity_break_on_read_mismatch  = TRUE
+        }
+    }
+
+    if $break_on_exception == 1 {
+        $cc->break_on_exception=TRUE
+    }
+
+    # $cc->trace_exceptions=TRUE
+    # $cc->break_on_decode_fault=TRUE
+
+    if $disable_ptrenc == 1 {
+        $cc->cc_isa_ptrenc = FALSE
+    }
+
+    if $disable_data_encryption == 1 {
+        $cc->disable-data-encryption = TRUE
+    }
+
+    if $debug_on == 1 {
+        $cc->debug_on = TRUE
+    }
+}
+
+if $magic == 1 {
+    bp.magic.break 2
+}
+
+script-branch {
+    while (TRUE) {
+        bp.magic.wait-for 25
+        stop
+        $v1 = (read-reg rsi)
+        $v2 = (read-reg rdi)
+
+        if ($v1 == 1) {
+            echo ("====[C3_GLOBALS]: Relocating from  0x%016lx" % [$v2])
+        } else if ($v1 == 2) {
+            echo ("====[C3_GLOBALS]: Relocating   to  0x%016lx" % [$v2])
+        } else if ($v1 == 3) {
+            echo ("====[C3_GLOBALS]: ImageBaseEncoded 0x%016lx" % [$v2])
+        } else if ($v1 == 4) {
+            echo ("====[C3_GLOBALS]: getImageBaseEncoded looking for 0x%016lx" % [$v2])
+        } else if ($v1 == 5) {
+            echo ("====[C3_GLOBALS]: getImageBaseEncoded found       0x%016lx" % [$v2])
+        } else if ($v1 == 5) {
+            echo ("====[C3_GLOBALS]: getImageBaseEncoded map size:   0x%016lx" % [$v2])
+        } else {
+            echo ("====[C3_GLOBALS]: Unrecognized MAGIC_SEND(26, 0x%016lx 0x%016lx)" % [$v1, $v2])
+        }
+
+        run
+    }
+}
+
+script-branch {
+    $edk2_logfile = ("%s.edk2.commandline.txt" % [$logfile])
+    start-command-line-capture -overwrite $edk2_logfile
+    $sercon.capture-start -overwrite ("%s.edk2.serconsole.txt" % [$logfile])
+    $sercon.bp-wait-for-console-string "Shell> FS0:"
+    stop
+    enable-real-time-mode
+
+    # Disable pointer encodign while Simics Agent works
+    if $enable_c3 == 1 {
+        echo "=== Disabling CA pointer encoding for running SimcsAgent"
+        $cc->cc_isa_ptrenc = FALSE
+    }
+
+    # Disable JIT and VMPW as these seem to trigger Simmics crash
+    disable-jit
+    disable-vmp
+
+    # Run and wait for GRUB and then re-enabled C3 poitner encoding
+    run
+    $sercon.bp-wait-for-console-string "Welcome to GRUB"
+    stop
+    if $enable_c3 == 1 {
+        echo "=== SimicsAgent done, re-enabling pointer encoding..."
+        $cc->cc_isa_ptrenc = TRUE
+
+        if $enable_integrity == 1 {
+            echo "=== Enabled full ICV protections:"
+            $cc->integrity = TRUE
+            $cc->integrity_warn_on_read_mismatch   = TRUE
+            $cc->integrity_fault_on_write_mismatch = TRUE
+            $cc->integrity_fault_on_read_mismatch  = TRUE
+            if $break_on_integrity_fault == 1 {
+                $cc->integrity_break_on_write_mismatch = TRUE
+                $cc->integrity_break_on_read_mismatch  = TRUE
+            }
+        }
+    }
+
+    # Log GRUB and Linux bootup to diffrent file
+    $sercon.capture-stop
+    stop-command-line-capture
+    start-command-line-capture -overwrite ("%s.grub.commandline.txt" % [$logfile])
+    $sercon.capture-start -overwrite ("%s.grub.serconsole.txt" % [$logfile])
+
+    if $gdb_port != 0 {
+        new-gdb-remote port=$gdb_port
+    } else {
+        run
+
+        $sercon.bp-wait-for-console-string "buildroot login: "
+        $sercon.input "%s\n" % [$user]
+
+        $sercon.bp-wait-for-console-string "Password:"
+        $sercon.input "%s\n" % [$password]
+
+        $sercon.bp-wait-for-console-string $prompt
+
+        enable-real-time-mode
+        echo "Logged in as %s:%s" % [$user, $password]
+        stop
+
+        if $do_quit != 0 {
+            echo "=== Quitting (do_quit != 0)"
+            quit
+        }
+
+        if ($connect_real_network) {
+            connect-real-network target-ip = 10.10.0.100
+        }
+
+        if $enable_c3 == 1 {
+            if $enable_integrity == 1 {
+                echo "=== Enabled full ICV protections:"
+                $cc->integrity = TRUE
+                $cc->integrity_warn_on_read_mismatch   = TRUE
+                $cc->integrity_fault_on_write_mismatch = TRUE
+                $cc->integrity_fault_on_read_mismatch  = TRUE
+                if $break_on_integrity_fault == 1 {
+                    $cc->integrity_break_on_write_mismatch = TRUE
+                    $cc->integrity_break_on_read_mismatch  = TRUE
+                }
+            }
+        }
+    }
+
+    if $parse_log_globals {
+        $script = (lookup-file $edk2_run_linux_sh)
+        echo (shell("%s parse_log_globals %s | grep C3_GLOBALS" %
+                    [$script, $edk2_logfile]))
+    }
+
+    # There seems to be some unknown behavior (possibly in either Simics EDK2
+    # FV package or the qsp-x86 Simics target itself) that causes the SMI
+    # trigger pin to be raised on boot, and also again raised on subsequent
+    # SMI exits.
+    #
+    # This ensures the SMI trigger pin is lowered on boot
+    qsp.mb.port_mem.write address = 0x434 value = (0x1<<5) size = 1
+    bp.hap.trace X86_Enter_SMM qsp.mb.cpu0.core[0][0]
+    bp.hap.trace X86_Leave_SMM qsp.mb.cpu0.core[0][0]
+
+    while (TRUE) {
+        # This ensures the SMI trigger pin is lowered on later SMM exit
+        bp.hap.wait-for X86_Leave_SMM qsp.mb.cpu0.core[0][0]
+        qsp.mb.port_mem.write address = 0x434 value = (0x1<<5) size = 1
+    }
+}
+
+run

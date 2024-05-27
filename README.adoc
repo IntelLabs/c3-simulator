@@ -18,8 +18,6 @@
 :SIMICS_BIN: /opt/simics/simics-6/simics-latest/bin
 :SIMICS_DEF_MODULE: c3
 
-
-
 WARNING: The contents of this repository and linked repositories are solely for
 research purposes and may contain software with vulnerabilities, such as
 outdated libraries. Do not use in production.
@@ -64,8 +62,6 @@ make ckpt-cc_llvm
 # Build C3 Simics modules
 make -B
 ----
-
-
 
 
 
@@ -124,8 +120,6 @@ pytest -v python_tests/test_unit.py --checkpoint {ckpt_llvm}
 # Run all unit tests for specific models (can specify multiple --model args)
 pytest -v python_tests/test_unit.py --checkpoint {ckpt_llvm} --model {SIMICS_DEF_MODULE}
 ----
-
-
 
 
 === C3 integrity and intra-object tripwires
@@ -219,7 +213,65 @@ multiple parallel compilation jobs. If compiling manually (e.g., not with the
 `runworkload_common.simics` script), make sure to set `-j1` to avoid parallel
 builds.
 
+=== Using Docker
 
+Most builds can be run within Docker to avoid installing all the dependencies
+on the development host system. In general, you can prepend `c3_docker-` to
+any Makefile target in order to run it in Docker instead (the first time will
+build the container and will take some time). For instance:
+
+[source,subs=attributes]
+----
+# To build checkpoint using Docker image
+make c3_docker-ckpt-cc_kernel
+----
+
+This is equivalent to running:
+[source,subs=attributes]
+----
+# To enter shell within Docker container
+make c3_docker_shell
+# Then, within container shell, run make
+make ckpt-cc_kernel
+----
+
+Note that Docker is mainly used for builds and output directories are bound
+from the host to the container. So building a checkpoint in or outside Docker
+results in the same output on the host machine (e.g., the above command will
+generate a checkpoint in `{CKPT_KERNEL}`, just as it would if building the
+target without Docker using `make ckpt-cc_kernel`).
+
+=== C3-hardened EDK2
+
+To boot up a C3-hardened EDK2 you will need to build EDK2 itself but also build
+a Buildroot filesystem to boot up into. The build targets automatically use
+Docker for most of the builds, and you can build and run with Make:
+
+[source,subs=attributes]
+----
+# Checkout EDK2 submodules and build EDK2 in Docker container
+make edk
+# Build the Buildroot system in Docker container
+make edk2_buildroot
+# Run edk2 in Simics with C3 (with some default settings)
+make edk2_run
+----
+
+Once built, you can also manually boot EDK2 and configure the system:
+
+[source,subs=attributes]
+----
+# Without C3 pointer encoding enable (i.e., no C3 protections)
+./edk2_src/scripts/edk2_run_linux.sh run --disable_ptrenc
+
+# With C3 and integrity enabled
+./edk2_src/scripts/edk2_run_linux.sh run --integrity_enabled
+
+# With networking on (e.g., to login via SSH)
+./edk2_src/scripts/edk2_run_linux.sh run --net
+# SSH into simulation with C3 EDK2 (from other shell)
+make edk2-buildroot-ssh
+----
 
 
 == Installing Simics and dependencies
@@ -237,11 +289,7 @@ git clone --recurse-submodules {simics-repo-url}
 === Download and install required packages
 
 
-
-
 ==== Install Simics
-
-
 
 
 Download and install Simics v.{simics-pkg-ver} from {simics-public-url}.

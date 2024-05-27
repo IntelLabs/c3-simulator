@@ -35,6 +35,9 @@ decl {
 	param system : string = board
 	param exit : int = 0
 	param console_output : bool = FALSE
+
+	param upload_unit_tests : bool = FALSE
+	param unit_tests_dir : string = "unit_tests"
 }
 
 run-python-file scripts/init.py
@@ -86,6 +89,14 @@ $branch_id = (script-branch "workload" {
 	if $upload_llvm {
 		@command_to_console("rm -rf llvm")
 		@upload_tarball("llvm/llvm_install")
+	}
+
+	if $upload_unit_tests {
+		echo "Uploading unit tests files"
+		@upload_tarball(simenv.unit_tests_dir)
+		@command_to_console("rm -f temp.tar")
+		@command_to_console("mkdir -p include")
+		@command_to_console("ln -s /home/simics/unit_tests/include/unit_tests include/unit_tests")
 	}
 
 	#using virtiofs

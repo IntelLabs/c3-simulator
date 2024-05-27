@@ -9,8 +9,6 @@
 run-python-file scripts/init.py
 $default_model = "c3"
 
-
-
 # by default environment gives CA to (malloc) memory objects
 # set disable_cc_env=1 to disable LA to CA encoding in the environment
 # other values still enable CC_ENV
@@ -22,17 +20,25 @@ if not defined exit { $exit = 0 }
 
 
 
-
-
-
-
 @check_mandatory_vars("workload_name")
 
 if defined llvm_lib_files {
 	@check_mandatory_vars("llvm_lib_src llvm_lib_dst")
 }
 
-$glibc_dir = "/home/simics/glibc/glibc-2.30_install/lib"
+$guest_llvm_lib = "/home/simics/llvm/llvm_install/lib"
+$guest_glibc_install = "/home/simics/glibc/glibc-2.30_install"
+$guest_glibc_lib = ("%s/lib" % [$guest_glibc_install])
+if not defined glibc_version { $glibc_version = "2.30" }
+if $glibc_version == "2.36" {
+	$libc = "libc.so.6"
+	$libpthread = "libpthread.so.0"
+	$glibc_ld = "ld-linux-x86-64.so.2"
+} else {
+	$libc = "libc-%s.so" % [$glibc_version]
+	$libpthread = "libpthread-%s.so" % [$glibc_version]
+	$glibc_ld = "ld-%s.so" % [$glibc_version]
+}
 if not defined guest_lib64_dir { $guest_lib64_dir = "/usr/lib64" }
 
 if not defined checkpoint { $checkpoint = "checkpoints/cc_glibc.ckpt"}
@@ -47,6 +53,13 @@ if not defined wrap_flags { $wrap_flags = "" }
 if not defined run_args { $run_args = "" }
 if not defined model { $model = $default_model }
 if not defined enable_integrity { $enable_integrity = FALSE }
+if not defined no_upload { $no_upload = FALSE }
+if not defined enable_cc_castack { $enable_cc_castack = FALSE }
+if not defined upload_c3_headers { $upload_c3_headers = FALSE }
+if not defined enable_cc_nowrap { $enable_cc_nowrap = FALSE }
+
+# Store this for log file
+$model_conf = $model
 
 $cc_model_type = FALSE
 if $model == "cc" or $model == "c3" {
@@ -54,19 +67,24 @@ if $model == "cc" or $model == "c3" {
 }
 
 
-
-
 if $cc_model_type {
 	if $disable_cc_env != 1 {
 		@append_env_var("CC_ENABLED=1") # environment return CA by default
 		if $enable_integrity == TRUE {
 			@append_env_var("CC_ICV_ENABLED=1")
+			$model_conf = $model_conf + "+icv"
 		}
 	} else {
 		@append_env_var("")             # initialize env_var
 	}
-
-
+	if $enable_cc_castack {
+		$env_vars = $env_vars + " CASTACK_ENABLED=1"
+		$model_conf = $model_conf + "+castack"
+	}
+	if $enable_cc_nowrap {
+		$env_vars = $env_vars + " CC_NO_WRAP_ENABLED=1"
+		$model_conf = $model_conf + "+nowrap"
+	}
 } else if $model == "lim" {
 	# If data_disp is already defined, that means the environment variables were already set
 	# by some other script that includes this one. It is important to not overwrite those
@@ -86,14 +104,10 @@ if $cc_model_type {
 	$data_disp = 1
 } else if $model == "native" {
 	if not defined env_vars { $env_vars = "" }
-
-
 } else {
     echo "ERROR: need to specify valid model. Exiting"
     exit 1
 }
-
-
 
 
 if defined glibc_debug {
@@ -116,22 +130,17 @@ if not defined unwinder { $unwinder="default_unwinder" }
 
 if defined log {
     !mkdir -p logs
-        if $unwinder == "default_unwinder" {
-            if defined experiment {
-                $logfile = "logs/" + $workload_name + "." + $experiment + "_" + $model + "_" + (date format=file)
-            } else {
-                $logfile = "logs/" + $workload_name + "_" + $model + "_" + (date format=file)
-            }
-        } else {
-            if defined experiment {
-                $logfile = "logs/" + $workload_name + "." + $experiment + "_" + $model + "_" + $unwinder + "_" + (date format=file)
-            } else {
-                $logfile = "logs/" + $workload_name + "_" + $model + "_" + $unwinder + "_" + (date format=file)
-            }
-        }
+	$logfile = "logs/%s" % [$workload_name]
+	if defined experiment { $logfile = $logfile + "." + $experiment }
+	$logfile = $logfile + "_" + $model_conf
+	if $unwinder != "default_unwinder" { $logfile = $logfile + "_" + $unwinder }
+	$logfile = $logfile + "_" + (date format=file)
+
 	start-command-line-capture $logfile
 	list-variables
 }
+
+if not defined bin_path { $bin_path = "/home/simics"}
 
 $branch_id = (script-branch "workload" {
 	# Send in a newline to trigger a prompt
@@ -153,40 +162,43 @@ $branch_id = (script-branch "workload" {
 		echo "  Copying LLVM lib files %s" % [$llvm_lib_files]
 		@copy_many_files(simenv.llvm_lib_files, simenv.llvm_lib_src, simenv.llvm_lib_dst)
 	}
-	if defined src_file {
+	if (defined src_file) and (not $no_upload) {
 		local $src_full_path = (lookup-file "%simics%/"+ $src_path + "/" + $src_file)
 		echo "  Copying src file %s to /home/simics" % [$src_full_path]
 		matic0.upload $src_full_path "/home/simics/"
 		matic0.wait-for-job
 	}
-	if defined include_file {
+
+	if (defined include_file) and (not $no_upload) {
 		if $include_file != "" {
 			echo "  Copying include file: '%s'" % [$include_file]
 			@copy_many_files(simenv.include_file, simenv.src_path)
 		}
 	}
-	if defined include_folders {  # add to command line include_folders="folderlist"
+	if (defined include_folders) and (not $no_upload) {  # add to command line include_folders="folderlist"
 		@copy_include_folders(simenv.include_folders)
 	}
 
-	if defined upload_c3_headers {
+	if $upload_c3_headers {
 		# these folders are copied by default
 		@command_to_console("rm -rf malloc crypto")
 		@copy_include_folders("malloc")
 		@copy_include_folders("crypto")
+		@command_to_console("ln -s include/malloc/cc_malloc.c")
+		@command_to_console("ln -s include/malloc/cc_globals.h")
+		@command_to_console("ln -s include/malloc/utils.h")
+	} else if (not $no_upload) {
+		if $cc_model_type {
+			echo "  Copying malloc files"
+			matic0.upload (lookup-file "%simics%/malloc/cc_malloc.c") "/home/simics/"
+			matic0.upload (lookup-file "%simics%/malloc/cc_globals.h") "/home/simics/"
+			matic0.upload (lookup-file "%simics%/malloc/utils.h") "/home/simics/"
+			matic0.wait-for-job
+		} else if $model == "lim" {
+			matic0.upload (lookup-file "%simics%/malloc/lim_ptr_encoding.h") "/home/simics/"
+			matic0.wait-for-job
+		}
 	}
-
-	if $cc_model_type {
-		echo "  Copying malloc files"
-		matic0.upload (lookup-file "%simics%/malloc/cc_malloc.c") "/home/simics/"
-		matic0.upload (lookup-file "%simics%/malloc/cc_globals.h") "/home/simics/"
-		matic0.upload (lookup-file "%simics%/malloc/utils.h") "/home/simics/"
-		matic0.wait-for-job
-	} else if $model == "lim" {
-		matic0.upload (lookup-file "%simics%/malloc/lim_ptr_encoding.h") "/home/simics/"
-		matic0.wait-for-job
-	}
-	# matic0.upload (lookup-file "%simics%/glibc/glibc-2.30_install/libc-2.30.so") "/home/simics/glibc/glibc-2.30_install/lib/"
 
 	if defined upload_libunwind {
 		(matic0.upload
@@ -199,12 +211,12 @@ $branch_id = (script-branch "workload" {
 	}
 
 	if defined upload_glibc {
-		echo "  Copying libc-2.30.so libpthread-2.30.so libdl-2.30.so"
-		$glibc_lib_host = "%simics%/glibc/glibc-2.30_install/lib"
-		$glibc_lib_target = "/home/simics/glibc/glibc-2.30_install/lib"
-		matic0.upload (lookup-file $glibc_lib_host + "/libc-2.30.so") $glibc_lib_target + "/"
-		matic0.upload (lookup-file $glibc_lib_host + "/libpthread-2.30.so") $glibc_lib_target + "/"
-		matic0.upload (lookup-file $glibc_lib_host + "/libdl-2.30.so") $glibc_lib_target + "/"
+		echo "  Copying %s %s %s" % [$libc, $libpthread, $glibc_ld]
+		$src = "%simics%/glibc/glibc-2.30_install/lib"
+		$dst = ("%s/" % [$guest_glibc_lib])
+		matic0.upload (lookup-file "%s/%s" % [$src, $libc]) $dst
+		matic0.upload (lookup-file "%s/%s" % [$src, $libpthread]) $dst
+		matic0.upload (lookup-file "%s/%s" % [$src, $glibc_ld]) $dst
 		matic0.wait-for-job
 	}
 
@@ -227,7 +239,6 @@ $branch_id = (script-branch "workload" {
 		echo "Overriding obj_files with: " + $obj_files
 	}
 	if not defined build_cmd { $build_cmd = $compiler + " " + $gcc_flags + " " + "-o " + $workload_name + " " + $obj_files + " " + $ld_flags }
-	if not defined bin_path { $bin_path = "/home/simics"}
 	if not defined run_cmd { $run_cmd = "./" + $workload_name + " " + $run_args }
 	echo "Build command: " + $build_cmd
 
@@ -235,8 +246,6 @@ $branch_id = (script-branch "workload" {
 	if $cc_model_type or $model == "lim" or $model == "native" {
 		$may_build = TRUE
 	}
-
-
 
 	if $may_build {
 		if not defined wrap {
@@ -247,29 +256,35 @@ $branch_id = (script-branch "workload" {
 			if defined download_bin_path {
 				enable-real-time-mode
 				matic0.download -overwrite from=($bin_path + "/" + $workload_name) to=$download_bin_path
-				matic0.download -overwrite from=("/home/simics/glibc/glibc-2.30_install/lib/libc-2.30.so") to=$download_bin_path
+				(matic0.download -overwrite
+					from=("%s/libc-2.30.so" % $guest_glibc_lib)
+					to=$download_bin_path)
 				matic0.wait-for-job
 				disable-real-time-mode
 				#@setup_debug()
 			}
 			@command_to_console("cp " + simenv.workload_name + " " + simenv.workload_name + "_orig")
 			if $unwinder == "default_unwinder" {
-				@command_to_console("patchelf --set-interpreter /home/simics/glibc/glibc-2.30_install/lib/ld-2.30.so --set-rpath /home/simics/glibc/glibc-2.30_install/lib " + simenv.workload_name)
-
+				$rpath = $guest_glibc_lib
+				$cmd = ("patchelf --set-interpreter %s/%s --set-rpath %s %s" %
+					    [$guest_glibc_lib, $glibc_ld, $rpath, $workload_name])
+				@command_to_console(simenv.cmd);
 			} else {
-				@command_to_console("patchelf --set-interpreter " + simenv.glibc_dir + "/ld-2.30.so " + simenv.workload_name)
-
-				$rpath = ($glibc_dir
-						+ ":/home/simics/llvm/llvm_install/lib"
-						+ ":/home/simics/llvm/llvm_install/lib/x86_64-unknown-linux-gnu")
-				@command_to_console("patchelf --set-rpath " + simenv.rpath + " " + simenv.workload_name)
-				@command_to_console("patchelf --add-needed libunwind.so.1 " + simenv.workload_name)
+				$rpath = ("%s:%s:%s/x86_64-unknown-linux-gnu" %
+					      [$guest_glibc_lib, $guest_llvm_lib,
+						   $guest_llvm_lib])
+				$cmd = ("patchelf --set-interpreter %s/%s --set-rpath %s %s" %
+					    [$guest_glibc_lib, $glibc_ld, $rpath, $workload_name])
+				@command_to_console(simenv.cmd);
+				$cmd = ("patchelf --add-needed libunwind.so.1 %s" %
+				        [$workload_name])
+				@command_to_console(simenv.cmd);
 			}
 			#@command_to_console("patchelf --add-needed libm.so.6 " + simenv.workload_name)
-			@command_to_console("ln -nsf " + simenv.guest_lib64_dir + "/libgtest.a " + simenv.glibc_dir)
-			@command_to_console("ln -nsf " + simenv.guest_lib64_dir + "/libgomp.so.1 " + simenv.glibc_dir)
-			@command_to_console("mkdir -p /home/simics/glibc/glibc-2.30_install/share/zoneinfo")
-			@command_to_console("ln -nsf /usr/share/zoneinfo/UTC /home/simics/glibc/glibc-2.30_install/share/zoneinfo/UTC")
+			@command_to_console("ln -nsf " + simenv.guest_lib64_dir + "/libgtest.a " + simenv.guest_glibc_lib)
+			@command_to_console("ln -nsf " + simenv.guest_lib64_dir + "/libgomp.so.1 " + simenv.guest_glibc_lib)
+			@command_to_console(f"mkdir -p {simenv.guest_glibc_install}/share/zoneinfo")
+			@command_to_console(f"ln -nsf /usr/share/zoneinfo/UTC {simenv.guest_glibc_install}/share/zoneinfo/UTC")
 			if $env_vars != "" {
 				$run_cmd = "%s %s" % [$env_vars, $run_cmd]
 			}
@@ -302,7 +317,9 @@ $branch_id = (script-branch "workload" {
 			$model_inst->integrity=TRUE
 		}
 
-
+		if $enable_cc_castack {
+			$model_inst->stack_hardening=TRUE
+		}
 
 	} else if $model == "lim" {
 		if defined cache {
@@ -319,8 +336,6 @@ $branch_id = (script-branch "workload" {
 	}
 
 
-
-
 	if  defined debug {
 		$model_inst->debug_on=TRUE
 	}
@@ -330,9 +345,7 @@ $branch_id = (script-branch "workload" {
 		}
 	}
 	if defined break_on_exception {
-		if $model == "lim" {
-			$model_inst->break_on_exception=TRUE
-		}
+		$model_inst->break_on_exception=TRUE
 	}
 
 	if defined break_on_decode_fault {
@@ -395,7 +408,15 @@ $branch_id = (script-branch "workload" {
                 cc $part_cycles
             }
         } else {
-            @command_to_console(simenv.run_cmd)
+            if defined enable_coredumps {
+                @command_to_console(simenv.run_cmd, True)
+                matic0.download -overwrite from=("%s/a.out" % [$bin_path]) to=debug
+                matic0.download -overwrite from=("%s/core" % [$bin_path]) to=debug
+                matic0.wait-for-job
+                echo "Downloaded core and a.out"
+            } else {
+                @command_to_console(simenv.run_cmd)
+            }
         }
         $end_time = (date -t)
 

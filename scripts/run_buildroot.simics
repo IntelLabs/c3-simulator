@@ -1,0 +1,105 @@
+decl {
+    param kernel : string
+    param virtio_rootfs : string
+    param kernel_cmdline : string
+
+    param user : string = "root"
+    param password : string = "root"
+
+    param system : string = "qsp"
+
+    param enable_c3 : int = 0
+    param enable_integrity : int = 0
+    param disable_ptrenc : int = 0
+    param disable_data_encryption : int = 0
+    param debug_on : int = 0
+    param gdb_conn : int = 0
+    param pov : int = 0
+}
+
+(load-target qsp-x86/user-provided-linux 
+    machine:software:linux:kernel=$kernel 
+    machine:software:linux:virtio_rootfs=$virtio_rootfs
+    machine:software:linux:cmdline=$kernel_cmdline
+    network:service_node:connect_real_network=napt
+    machine:hardware:consoles:gfx_con:show=0)
+
+$cpu        = $system.mb.cpu0.core[0][0]
+$graphcon   = $system.console.con
+$sercon     = $system.serconsole.con
+
+
+$logfile="./logs/linux"
+$logfile=$logfile + ".ptrenc"+$disable_ptrenc
+$logfile=$logfile + ".int."+$enable_integrity
+$logfile=$logfile+ ".data_enc"+$disable_data_encryption+"."+(date format=file)
+
+$simlogfile="./logs/simics"
+$simlogfile=$simlogfile + ".ptrenc"+$disable_ptrenc
+$simlogfile=$simlogfile + ".int."+$enable_integrity
+$simlogfile=$simlogfile+ ".data_enc"+$disable_data_encryption+"."+(date format=file)
+
+#$sercon.bp-break-console-string "Starting network"
+script-branch {
+    $sercon.bp-wait-for-console-string "Welcome to GRUB!"
+    stop
+    #connect qsp.mb.sb.eth_slot ethernet_switch.device1
+    if $enable_c3 == 1 {
+        if $enable_integrity == 1 {
+            new-cc-model -connect-all -integrity
+            cc0_0->integrity_break_on_write_mismatch = TRUE
+            cc0_0->integrity_fault_on_write_mismatch = FALSE
+            cc0_0->integrity_break_on_read_mismatch = FALSE
+        } else {
+            new-cc-model -connect-all
+        }
+
+        if $disable_ptrenc == 1 {
+            cc0_0->cc_isa_ptrenc = FALSE
+        }
+
+        if $disable_data_encryption == 1 {
+            cc0_0->disable_data_encryption = TRUE
+        }
+
+        if $debug_on == 1 {
+            cc0_0->debug_on = TRUE
+        }
+    }
+    $system.serconsole.con.capture-start -overwrite "%s.serconsole.txt" % $logfile
+    start-command-line-capture $simlogfile
+    run
+    if $gdb_conn == 1 {
+        $sercon.bp-wait-for-console-string "Externally Configured Linux"
+        stop
+        
+        if $disable_ptrenc == 1 {
+            new-gdb-remote port=9124
+        } else {
+            new-gdb-remote port=9124
+        }
+    }
+
+    $sercon.bp-wait-for-console-string "buildroot login: "
+    $sercon.input "%s\n" % [$user]
+
+    $sercon.bp-wait-for-console-string "Password:"
+    $sercon.input "%s\n" % [$password]
+
+    if $user == "root" {
+        $sercon.bp-wait-for-console-string "# "
+    } else {
+        $sercon.bp-wait-for-console-string "$ "
+    }
+
+    echo "Logged in as %s:%s" % [$user, $password]
+
+    
+    if $enable_integrity == 1 {
+        cc0_0->integrity_break_on_read_mismatch = TRUE
+    }
+    enable-real-time-mode
+    
+}
+
+run

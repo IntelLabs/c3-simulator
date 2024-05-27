@@ -76,6 +76,10 @@
                           (unsigned int)Sim_Attr_Read_Only),                   \
             "b", NULL, "Enables " desc ". Default off.");
 
+#define COMMON_FOR_OPTIONS(op)                                                 \
+    op(trace_exceptions, "Print debug note on exception address is decoded");  \
+    op(break_on_exception, "halt if an exception is encountered");
+
 /**
  * @brief Main object orchestrating connection to on CPU
  *
@@ -87,6 +91,14 @@
  *
  */
 class SimicsConnection {
+    // Don't break on #PF when break_on_exception is set (or otherwise)
+    static constexpr bool kNeverBreakOnPF = true;
+    // Ignore exceptions greater than or equal to #32
+    static constexpr bool kIgnoreExceptionGTE32 = true;
+
+ protected:
+    cpu_cb_handle_t *exception_cb = nullptr;
+
  public:
     conf_object_t *con_obj_;
     conf_object_t *cpu_;
@@ -95,12 +107,23 @@ class SimicsConnection {
     int va_digits_;
     unsigned id_;
 
+    COMMON_FOR_OPTIONS(DECLARE)
+
+    ADD_DEFAULT_GETTER(trace_exceptions)
+    ADD_DEFAULT_GETTER(break_on_exception)
+
+    inline set_error_t set_trace_exceptions(void *, attr_value_t *val,
+                                            attr_value_t *);
+    inline set_error_t set_break_on_exception(void *, attr_value_t *val,
+                                              attr_value_t *);
+
 #define _ADD_IFACES(op)                                                        \
     op(cpu_exception_query, eq_iface) op(cpu_instruction_decoder, id_iface);   \
     op(cpu_instruction_query, iq_iface);                                       \
     op(cpu_instrumentation_subscribe, ci_iface);                               \
     op(cpu_memory_query, mq_iface) op(exception, ex_iface);                    \
     op(int_register, ir_iface) op(processor_info_v2, pi_iface);                \
+    op(smm_instrumentation_subscribe, smm_iface);                              \
     op(x86_address_query, x86_aq_iface);                                       \
     op(x86_exception, x86_ex_iface);                                           \
     op(x86_exception_query, x86_eq_iface);                                     \
@@ -162,6 +185,9 @@ class SimicsConnection {
         va_digits_ = (pi_iface->get_logical_address_width(cpu) + 3) >> 2;
 
         id_ = SIM_get_processor_number(cpu);
+
+        // Make sure we we have the exception callback if it is needed
+        update_exception_callback();
     }
 
     virtual inline void ctx_loaded_cb() {}
@@ -172,6 +198,8 @@ class SimicsConnection {
      * Override in subclass if needed, base class prints no stats.
      */
     virtual inline void print_stats() {}
+
+    inline void exception_before(exception_handle_t *ex) const;
 
     /**
      * @brief Disable all connection callbacks.
@@ -191,11 +219,42 @@ class SimicsConnection {
         ci_iface->disable_connection_callbacks(cpu_, con_obj_);
     }
 
-    inline void register_exception_before_cb(int exception_number,
+    inline auto register_exception_before_cb(int exception_number,
                                              cpu_exception_cb_t cb,
                                              lang_void *data) const {
-        ci_iface->register_exception_before_cb(cpu_, con_obj_, exception_number,
-                                               cb, data);
+        return ci_iface->register_exception_before_cb(
+                cpu_, con_obj_, exception_number, cb, data);
+    }
+
+    inline auto register_exception_after_cb(int exception_number,
+                                            cpu_exception_cb_t cb,
+                                            lang_void *data) const {
+        return ci_iface->register_exception_after_cb(
+                cpu_, con_obj_, exception_number, cb, data);
+    }
+
+    auto *register_smm_enter_before_cb(smm_switch_cb_t cb,
+                                       lang_void *user_data) {
+        return smm_iface->register_smm_enter_before_cb(cpu_, con_obj_, cb,
+                                                       user_data);
+    }
+
+    auto *register_smm_enter_after_cb(smm_switch_cb_t cb,
+                                      lang_void *user_data) {
+        return smm_iface->register_smm_enter_after_cb(cpu_, con_obj_, cb,
+                                                      user_data);
+    }
+
+    auto *register_smm_leave_before_cb(smm_switch_cb_t cb,
+                                       lang_void *user_data) {
+        return smm_iface->register_smm_leave_before_cb(cpu_, con_obj_, cb,
+                                                       user_data);
+    }
+
+    auto *register_smm_leave_after_cb(smm_switch_cb_t cb,
+                                      lang_void *user_data) {
+        return smm_iface->register_smm_leave_after_cb(cpu_, con_obj_, cb,
+                                                      user_data);
     }
 
     inline void register_address_before_cb(cpu_address_cb_t cb,
@@ -203,13 +262,15 @@ class SimicsConnection {
         ci_iface->register_address_before_cb(cpu_, con_obj_, cb, data);
     }
 
-    inline void register_instruction_before_cb(cpu_instruction_cb_t cb,
+    inline auto register_instruction_before_cb(cpu_instruction_cb_t cb,
                                                lang_void *cbdata) const {
-        ci_iface->register_instruction_before_cb(cpu_, con_obj_, cb, cbdata);
+        return ci_iface->register_instruction_before_cb(cpu_, con_obj_, cb,
+                                                        cbdata);
     }
-    inline void register_instruction_after_cb(cpu_instruction_cb_t cb,
+    inline auto register_instruction_after_cb(cpu_instruction_cb_t cb,
                                               lang_void *cbdata) const {
-        ci_iface->register_instruction_after_cb(cpu_, con_obj_, cb, cbdata);
+        return ci_iface->register_instruction_after_cb(cpu_, con_obj_, cb,
+                                                       cbdata);
     }
 
     inline auto register_read_before_cb(cpu_access_scope_t scope,
@@ -320,7 +381,7 @@ class SimicsConnection {
     /**
      * @brief Write 64-bit value to linear address
      *
-     * Tranlsates LA to PA and writes the value from memory.
+     * Translates LA to PA and writes the value from memory.
      *
      * @param la
      * @param value
@@ -336,7 +397,7 @@ class SimicsConnection {
     /**
      * @brief Read 64-bit value form linear address
      *
-     * Tranlsates LA to PA and reads the value from memory.
+     * Translates LA to PA and reads the value from memory.
      *
      * @param address
      * @return uint64_t
@@ -456,22 +517,61 @@ class SimicsConnection {
         return x86_reg_access_iface->get_gpr(cpu_, gpr);
     }
 
+    inline uint64_t get_cr(const x86_cr_t cr) const {
+        return x86_reg_access_iface->get_cr(cpu_, cr);
+    }
+
+    inline x86_seg_reg_t get_seg(const x86_seg_t seg) const {
+        return x86_reg_access_iface->get_seg(cpu_, seg);
+    }
+
+    inline bool is_user_mode() const {
+        return (get_seg(X86_Seg_CS).base & 3) == 0;
+    }
+
     inline void set_gpr(const int gpr, const uint64_t val) const {
         return x86_reg_access_iface->set_gpr(cpu_, gpr, val);
     }
 
+    inline uint8_t get_exception_vector(exception_handle_t *eh) const {
+        return x86_eq_iface->vector(cpu_, eh);
+    }
+
+    inline x86_exception_source_t
+    get_exception_source(exception_handle_t *eh) const {
+        return x86_eq_iface->source(cpu_, eh);
+    }
+
+    inline uint32_t get_exception_error_code(exception_handle_t *eh) const {
+        return x86_eq_iface->source(cpu_, eh);
+    }
+
+ protected:
+    inline void update_exception_callback();
+
+ private:
+    inline void enable_exception_callback();
+    inline void disable_exception_callback();
+
+ public:
     /* static functions */
 
     /**
      * @brief Register attributes with Simics
      *
      * This will be called during module init and can be overriden with module-
-     * specific per-conneciton attributes that need to be registered.
+     * specific per-connection attributes that need to be registered.
      *
      * @param cl Simics conf_class_t of the registered connection type
      */
     static inline void
     register_connection_specific_attributes(conf_class_t *cl) {}
+
+    static inline void register_common_connection_attributes(conf_class_t *cl) {
+        auto *connection_class = cl;
+        using ConnectionTy = SimicsConnection;
+        COMMON_FOR_OPTIONS(ATTR_REGISTER_ACCESSOR)
+    }
 
 #undef _ADD_IFACES
 #undef _ADD_REGS
@@ -484,5 +584,67 @@ typedef struct {
     logical_address_t la_;
     int size_;
 } cpu_address_info_t;
+
+inline void SimicsConnection::update_exception_callback() {
+    if (this->trace_exceptions || this->break_on_exception) {
+        enable_exception_callback();
+    }
+
+    if (!(this->trace_exceptions || this->break_on_exception)) {
+        disable_exception_callback();
+    }
+}
+
+inline void SimicsConnection::enable_exception_callback() {
+    if (exception_cb == nullptr) {
+        exception_cb = this->register_exception_before_cb(
+                CPU_Exception_All,
+                [](auto *, auto *, auto *h, auto *d) {
+                    static_cast<SimicsConnection *>(d)->exception_before(h);
+                },
+                static_cast<void *>(this));
+    }
+    ci_iface->enable_callback(this->cpu_, exception_cb);
+}
+
+inline void SimicsConnection::disable_exception_callback() {
+    if (exception_cb != nullptr) {
+        ci_iface->disable_callback(this->cpu_, exception_cb);
+    }
+}
+
+inline void SimicsConnection::exception_before(exception_handle_t *eh) const {
+    if (this->trace_exceptions || this->break_on_exception) {
+        const auto e = this->get_exception_vector(eh);
+        if (!kIgnoreExceptionGTE32 || e < 32) {
+            SIM_printf("Encountered exception #%d (source: %s)\n", e,
+                       exception_source_2str(this->get_exception_source(eh)));
+            if (this->break_on_exception && (!kNeverBreakOnPF || e != 14)) {
+                SIM_printf("Breaking on exception\n");
+                SIM_break_simulation("Breaking on exception\n");
+            }
+        }
+    }
+}
+
+inline set_error_t SimicsConnection::set_trace_exceptions(void *,
+                                                          attr_value_t *val,
+                                                          attr_value_t *) {
+    SIM_printf("[%s]: trace_exceptions %s\n", SIM_object_name(this->con_obj_),
+               (val ? "enabled" : "disabled"));
+    trace_exceptions = SIM_attr_boolean(*val);
+    update_exception_callback();
+    return Sim_Set_Ok;
+}
+
+inline set_error_t SimicsConnection::set_break_on_exception(void *,
+                                                            attr_value_t *val,
+                                                            attr_value_t *) {
+    SIM_printf("[%s]: break_on_exception %s\n", SIM_object_name(this->con_obj_),
+               (val ? "enabled" : "disabled"));
+    break_on_exception = SIM_attr_boolean(*val);
+    update_exception_callback();
+    return Sim_Set_Ok;
+}
 
 #endif  // MODULES_COMMON_CCSIMICS_SIMICS_CONNECTION_H_

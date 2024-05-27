@@ -147,7 +147,7 @@ TEST(STRING, strnlen1) {
 
 TEST(STRING, strcpy) {
     const char str1[] = "abcdefgh01235678";
-    int length = strlen(str1);
+    int length = strlen(str1) + 1;
     char *str2;
     str2 = (char *)malloc(sizeof(char) * length);
     strcpy(str2, str1);
@@ -157,7 +157,7 @@ TEST(STRING, strcpy) {
 
 TEST(STRING, strncpy) {
     const char str1[] = "abcdefABCDEF012356";
-    int length = strlen(str1);
+    int length = strlen(str1) + 1;
     const char str_expected[] = "abcdefABCD";
     int expstr_length = strlen(str_expected);
     char *str2;

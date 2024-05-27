@@ -17,11 +17,23 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
-#include "crypto/ascon_cipher.h"
-#include "crypto/bipbip.h"
-#include "malloc/cc_globals.h"
+#include "ascon_cipher.h"  // NOLINT
+#include "bipbip.h"        // NOLINT
+#include "../malloc/cc_globals.h"
 
 #if defined(__cplusplus)
+
+static constexpr size_t kC3PtrKeySize = C3_KEY_SIZE(CC_POINTER_CIPHER);
+static constexpr size_t kC3DataKeySize = C3_KEY_SIZE(CC_DATA_CIPHER);
+static constexpr uint8_t kC3DefaultPtrKey[kC3PtrKeySize] = {
+        0xd1, 0xbe, 0x2c, 0xdb, 0xb5, 0x82, 0x4d, 0x03, 0x17, 0x5c, 0x25,
+        0x2a, 0x20, 0xb6, 0xf2, 0x93, 0xfd, 0x01, 0x96, 0xe7, 0xb5, 0xe6,
+        0x88, 0x1c, 0xb3, 0x69, 0x22, 0x60, 0x38, 0x09, 0xf6, 0x68};
+static constexpr uint8_t kC3DefaultDataKey[kC3DataKeySize] = {
+        0xb5, 0x82, 0x4d, 0x03, 0x17, 0x5c, 0x25, 0x2a,
+        0xfc, 0x71, 0x1e, 0x01, 0x02, 0x60, 0x87, 0x91};
+
+class SimicsConnection;
 
 /**
  * @brief Extracts the tweak bits from a CA
@@ -57,21 +69,21 @@ static inline ptr_metadata_t get_pointer_metadata(uint64_t pointer) {
  * @brief Implements pointer encoding
 
  * This implements the encoding and decoding of C3 encoded addresses, i.e.,
- * cyrpgorahpic addresses (CAs) from/to canonical linear addreses.
+ * cryptographic addresses (CAs) from/to canonical linear addresses.
  *
- * The object will be used in variaous callbacks to internally, and is also used
- * in the implementaiton of the callbacks that implements the C3 ISA extensions
+ * The object will be used in various callbacks to internally, and is also used
+ * in the implementation of the callbacks that implements the C3 ISA extensions
  * that provide encptr and decptr instructions. It may internally cache key
  * configurations, and key updates must be propagated here by invoking
  * init_pointer_key().
  */
-class CCPointerEncoding {
+class CCPointerEncodingBase {
  protected:
     crypto::PointerCipher24b pointer_cipher_;
 
  public:
-    CCPointerEncoding() = default;
-    virtual inline ~CCPointerEncoding() = default;
+    CCPointerEncodingBase() = default;
+    virtual inline ~CCPointerEncodingBase() = default;
 
     /**
      * @brief Encrypt an already decorated CA
@@ -94,7 +106,7 @@ class CCPointerEncoding {
     /**
      * @brief Decrypt a CA to a decorated linear address
      *
-     * Decrypt a CA, but does not remove additoinal metadata from the resulting
+     * Decrypt a CA, but does not remove additional metadata from the resulting
      * decorated pointer.
      *
      * @param ptr
@@ -114,7 +126,7 @@ class CCPointerEncoding {
     /**
      * @brief Decorate, i.e., add metadata into a give LA
      *
-     * The decorated pointer will be unusable as-is, and is exptected to enxt
+     * The decorated pointer will be unusable as-is, and is expected to next
      * be encrypted.
      *
      * @param ptr
@@ -134,7 +146,7 @@ class CCPointerEncoding {
      * @return ca_t
      */
     virtual inline ca_t undecorate_ptr(ca_t ptr) {
-        ptr.s_extended_ = (ptr.s_prime_bit_) != 0u ? FMASK : 0x0;
+        ptr.s_extended_ = (ptr.s_prime_bit_) != 0u ? C3_FMASK : 0x0;
         return ptr;
     }
 
@@ -164,6 +176,10 @@ class CCPointerEncoding {
         return undecorate_ptr(decrypt_ptr(get_ca_t(encoded_pointer))).uint64_;
     }
 
+    inline uint64_t decode_pointer_if_encoded(uint64_t ptr) {
+        return is_encoded_cc_ptr(ptr) ? decode_pointer(ptr) : ptr;
+    }
+
     /**
      * @brief Encodes g given LA to a CA
      *
@@ -188,29 +204,32 @@ class CCPointerEncoding {
  * May avoid some bugs in bare-bones testing environments without loader
  * support, e.g., by avoiding the need for virtual call tables and such.
  */
-class CCPointerEncodingPlain final : public CCPointerEncoding {
+class CCPointerEncodingPlain final : public CCPointerEncodingBase {
  public:
     CCPointerEncodingPlain() {}
 };
 
-class CCDataEncryption {
+class CCPointerEncoding final : public CCPointerEncodingBase {
  public:
-    static constexpr size_t kKeySize = KEY_SIZE(CC_DATA_CIPHER);
-    static constexpr uint8_t kDefaultKey[kKeySize] = {
-            0xb5, 0x82, 0x4d, 0x03, 0x17, 0x5c, 0x25, 0x2a,
-            0xfc, 0x71, 0x1e, 0x01, 0x02, 0x60, 0x87, 0x91};
+    CCPointerEncoding() : CCPointerEncodingBase() {}
+    CCPointerEncoding(SimicsConnection *con) : CCPointerEncodingBase() {}
+};
 
+class CCDataEncryption {
  private:
-    data_key_t data_key_ = {0};
+    data_key_t data_key_ = {
+            0,    // size_
+            {0},  // bytes_
+    };
 
  public:
     inline CCDataEncryption() {
-        data_key_.size_ = kKeySize;
-        set_key(kDefaultKey);
+        data_key_.size_ = kC3DataKeySize;
+        set_key(kC3DefaultDataKey);
     }
 
     inline void set_key(const uint8_t *key) {
-        memcpy(data_key_.bytes_, key, kKeySize);
+        memcpy(data_key_.bytes_, key, kC3DataKeySize);
     }
 
     inline void encrypt_decrypt_bytes(uint64_t la, uint8_t *const input,
@@ -245,6 +264,25 @@ class CCDataEncryption {
         int offset = static_cast<int>(la_encoded & 0x7);
         for (int i = size - 1; i >= 0; i--) {
             output[i] = input[i] ^ countermode_mask_unaligned[i + offset];
+        }
+
+        return output;
+    }
+
+    static inline uint8_t *
+    encrypt_decrypt_many_bytes(uint64_t la_encoded, const data_key_t *data_key,
+                               const uint8_t *input, uint8_t *output,
+                               size_t size) {
+        constexpr size_t block_size = 64;
+
+        for (unsigned i = 0; size > i; i += block_size) {
+            const auto chunk_ptr = la_encoded + i;
+            const auto chunk_size =
+                    (size - i) > block_size ? block_size : (size - i);
+            const auto in = input + i;
+            const auto out = output + i;
+
+            encrypt_decrypt_bytes(chunk_ptr, data_key, in, out, chunk_size);
         }
 
         return output;

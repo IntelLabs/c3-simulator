@@ -229,6 +229,7 @@ template <typename SimicsModuleTy, typename ConnectionTy> class SimicsModule {
         SIM_REGISTER_INTERFACE(cl, instrumentation_connection, &kIcIface);
         connection_class = cl;
         register_common_connection_attributes(cl);
+        ConnectionTy::register_common_connection_attributes(cl);
         ConnectionTy::register_connection_specific_attributes(cl);
         return cl;
     }

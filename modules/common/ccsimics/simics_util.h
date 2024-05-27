@@ -16,13 +16,35 @@
 extern "C" {
 #endif  // defined(__cplusplus)
 
+// Break on internal shadow rip errors (instead of just terminating sim)
+static constexpr bool kBreakOnC3InternalError = true;
+
+#define __FILENAME__                                                           \
+    (strstr(__FILE__, "../modules/") != NULL                                   \
+             ? strstr(__FILE__, "../modules/") + 1                             \
+             : (strstr(__FILE__, "/modules/") != NULL                          \
+                        ? strstr(__FILE__, "/modules/") + 1                    \
+                        : __FILE__))
+
 #define dbgprint(f, ...)                                                       \
-    SIM_printf("(%s:%d) %s: " f "\n", __FILE__, __LINE__, __func__,            \
+    SIM_printf("(%s:%d) %s: " f "\n", __FILENAME__, __LINE__, __func__,        \
                ##__VA_ARGS__)
 
 #define ifdbgprint(pred, ...)                                                  \
-    if (pred)                                                                  \
-    dbgprint(__VA_ARGS__)
+    if (pred) {                                                                \
+        dbgprint(__VA_ARGS__);                                                 \
+    }
+
+#define break_or_die(msg, exit_val)                                            \
+    do {                                                                       \
+        if (kBreakOnC3InternalError) {                                         \
+            SIM_printf("Encountered C3 Simics module, breaking simulation\n"); \
+            SIM_break_simulation(msg);                                         \
+        } else {                                                               \
+            SIM_printf("Encountered C3 Simics module, quitting\n");            \
+            SIM_quit(exit_val);                                                \
+        }                                                                      \
+    } while (true)
 
 #define sizeof_field(t, f) sizeof((static_cast<t *>(0))->f)  // NOLINT
 
@@ -51,6 +73,22 @@ static inline std::string buf_to_hex_string(const uint8_t *buf, size_t len) {
            << static_cast<int>(buf[i]);
     }
     return ss.str();
+}
+
+static inline const char *to_string(const x86_exec_mode_t exec_mode) {
+    switch (exec_mode) {
+    case X86_Exec_Mode_Real:
+        return "X86_Exec_Mode_Real";
+    case X86_Exec_Mode_V86:
+        return "X86_Exec_Mode_V86";
+    case X86_Exec_Mode_Prot:
+        return "X86_Exec_Mode_Prot";
+    case X86_Exec_Mode_Compat:
+        return "X86_Exec_Mode_Compat";
+    case X86_Exec_Mode_64:
+        return "X86_Exec_Mode_64";
+    }
+    return "unknown";
 }
 
 static inline const char *convert_reg_to_string(int reg) {
@@ -94,6 +132,29 @@ static inline const char *convert_reg_to_string(int reg) {
     }
 }
 
+static inline const char *exception_source_2str(x86_exception_source_t es) {
+    switch (es) {
+    case X86_Exc_Hardware:
+        return "X86_Exc_Hardware";
+    case X86_Exc_Software:
+        return "X86_Exc_Software";
+    case X86_Exc_External:
+        return "X86_Exc_External";
+    case X86_Exc_Software_Debug:
+        return "X86_Exc_Software_Debug";
+    case X86_Exc_Software_Priv:
+        return "X86_Exc_Software_Priv";
+    case X86_Exc_Triple_Fault:
+        return "X86_Exc_Triple_Fault";
+    case X86_Exc_NMI:
+        return "X86_Exc_NMI";
+    case X86_Exc_Other_Event:
+        return "X86_Exc_Other_Event";
+    default:
+        return "Unknown";
+    }
+}
+
 static inline void print_simics_stacktrace() {
     constexpr const int arr_max_size = 1024;
     void *array[arr_max_size];
@@ -132,5 +193,31 @@ static inline const char *c3_asan_default_options() {
 
 #if defined(__cplusplus)
 }
+
+namespace ccsimics {
+
+typedef struct {
+    union {
+        struct {
+            uint8_t r_m_ : 3;
+            uint8_t reg_ : 3;
+            uint8_t mod_ : 2;
+        };
+        uint8_t u8_;
+    };
+} modrm_t;
+
+static inline int compare_bytes(const uint8_t *a, const uint8_t *b,
+                                size_t len) {
+    for (size_t i = 0; i < len; ++i) {
+        if (((const char *)a)[i] != ((const char *)b)[i]) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+}  // namespace ccsimics
+
 #endif  // defined(__cplusplus)
 #endif  // MODULES_COMMON_CCSIMICS_SIMICS_UTIL_H_

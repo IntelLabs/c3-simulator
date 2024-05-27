@@ -14,27 +14,27 @@
 #include "ccsimics/simics_connection.h"
 #include "c3_model.h"  // NOLINT
 
+
+#define FOR_OPTIONS_INTERNAL(op)
+
+
 #define FOR_OPTIONS(op)                                                        \
     op(debug_on, "enable debug messages");                                     \
     op(break_on_decode_fault,                                                  \
        "halt simulation when a non-canonical address is decoded");             \
     op(disable_data_encryption,                                                \
        "disable data encryption (but keep pointer encoding)");                 \
-    op(integrity, "enable integrity");
+    op(integrity, "enable integrity");                                         \
+    op(stack_hardening, "enable stack hardening");                             \
+    FOR_OPTIONS_INTERNAL(op)
 
 class C3SimicsConnection;
+using C3Context = ContextFinal<C3SimicsConnection>;
 
-class C3PtrEnc final : public CCPointerEncoding {
- public:
-    C3PtrEnc() {}
-};
+#define CC_SIMICS_POINTER_ENCODING_TYPE CCPointerEncoding
 
-class C3Context final : public Context {
- public:
-    C3Context(SimicsConnection *con, C3PtrEnc *ptr_enc)
-        : Context(con, ptr_enc) {}
-};
 
+using C3PtrEnc = CC_SIMICS_POINTER_ENCODING_TYPE;
 using C3ModelTy = ccsimics::C3Model<C3SimicsConnection, C3Context, C3PtrEnc>;
 
 class C3PtrencdecIsa final
@@ -45,6 +45,8 @@ class C3PtrencdecIsa final
 };
 
 class C3SimicsConnection final : public SimicsConnection {
+    using CtxTy = C3Context;
+    using ConTy = C3SimicsConnection;
     using integrity_isa_t =
             ccsimics::IntegrityIsa<C3SimicsConnection, C3ModelTy>;
 
@@ -64,9 +66,10 @@ class C3SimicsConnection final : public SimicsConnection {
     ADD_DEFAULT_ACCESSORS(disable_data_encryption)
     ADD_DEFAULT_GETTER(debug_on)
     ADD_DEFAULT_GETTER(integrity)
+    ADD_DEFAULT_GETTER(stack_hardening)
 
     void configure() {
-        ptr_enc_ = std::make_unique<C3PtrEnc>();
+        ptr_enc_ = std::make_unique<C3PtrEnc>(this);
 
         ctx_ = std::make_unique<C3Context>(this, ptr_enc_.get());
         ctx_->enable<C3Context>();
@@ -116,6 +119,16 @@ class C3SimicsConnection final : public SimicsConnection {
 
     inline set_error_t set_integrity(void *, attr_value_t *v, attr_value_t *) {
         set_integrity(SIM_attr_boolean(*v));
+        return Sim_Set_Ok;
+    }
+
+    inline set_error_t set_stack_hardening(void *, attr_value_t *val,
+                                           attr_value_t *) {
+        SIM_printf("[CC] Stack hardening %s\n", (val ? "enabled" : "disabled"));
+        stack_hardening = SIM_attr_boolean(*val);
+        if (c3_) {
+            c3_->set_stack_hardening(stack_hardening);
+        }
         return Sim_Set_Ok;
     }
 

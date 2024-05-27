@@ -1,7 +1,6 @@
 // model: cc-integrity c3-integrity
 // simics_args: disable_cc_env=1
-
-// NOTE: Kernel support not yet extended to Integrity
+// should_fail: yes
 
 #define DEBUG
 
@@ -32,15 +31,16 @@ TEST(Integrity, icv_fail_on_ca_to_la_write) {
     EXPECT_STREQ(la, str);
 
     // Write to plaintext buffer using CA!
-    EXPECT_DEATH(strncpy(ca, str, size), ".*");
+    strncpy(ca, str, size);
+    // EXPECT_DEATH seems to be unreliable in the test environments
+    // EXPECT_DEATH(strncpy(ca, str, size), ".*");
 
     // Disable integrity
     if (!is_model("native")) {
         cc_set_icv_enabled(false);
     }
 
-    // This should still work now since the EXPECT_DEATH gets suppressed here
-    EXPECT_STREQ(la, str);
+    printf("FAILURE: Should never reach here!!!\n");
 }
 
 int main(int argc, char **argv) {

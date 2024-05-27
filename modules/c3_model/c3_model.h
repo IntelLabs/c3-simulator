@@ -14,10 +14,13 @@ extern "C" {
 #include <xed-interface.h>
 }
 #include "ccsimics/c3_base_model.h"
+#include "ccsimics/castack.h"
 #include "ccsimics/data_encryption.h"
 #include "ccsimics/integrity.h"
 #include "ccsimics/rep_movsb_tripwire.h"
 #include "ccsimics/simics_util.h"
+#include "ccsimics/stack_hardening.h"
+
 
 namespace ccsimics {
 
@@ -29,12 +32,14 @@ class C3Model : public C3BaseModel<ConTy, CtxTy, PtrEncTy> {
 
     std::unique_ptr<RepMovsIsaTy> rep_movs_;
     std::unique_ptr<IntegrityTy> integrity_;
+    std::unique_ptr<ccsimics::StackHardening> stack_ = nullptr;
 
  public:
     C3Model(ConTy *con, CtxTy *ctx, PtrEncTy *ptrenc)
         : C3BaseModel<ConTy, CtxTy, PtrEncTy>(con, ctx, ptrenc) {
         rep_movs_ = std::make_unique<RepMovsIsaTy>(this, con, ctx);
         integrity_ = std::make_unique<IntegrityTy>(this, con, ctx);
+        set_stack_hardening(con->stack_hardening);
     }
 
     inline auto *get_integrity() { return integrity_.get(); }
@@ -44,15 +49,6 @@ class C3Model : public C3BaseModel<ConTy, CtxTy, PtrEncTy> {
      */
     template <typename HandlerTy> inline void register_callbacks(ConTy *con) {
         BaseTy::template register_callbacks<HandlerTy>(con);
-
-        con->register_exception_before_cb(
-                CPU_Exception_All,
-                [](auto *obj, auto *cpu, auto *handle, auto *m) {
-                    static_cast<HandlerTy *>(m)->exception_before(obj, cpu,
-                                                                  handle, NULL);
-                },
-                static_cast<void *>(this));
-
         rep_movs_->register_callbacks();
     }
 
@@ -149,6 +145,53 @@ class C3Model : public C3BaseModel<ConTy, CtxTy, PtrEncTy> {
         }
 
         return BaseTy::handle_la_mismatch_on_mem_access(la);
+    }
+
+    inline std::unique_ptr<ccsimics::StackHardening> gen_stack_hardening() {
+        return std::make_unique<ccsimics::CaStack<ConTy, PtrEncTy>>(
+                this->con_, this->ptrenc_);
+    }
+
+    inline void set_stack_hardening(bool val) {
+        if (val) {
+            if (stack_.get() == nullptr) {
+                stack_ = gen_stack_hardening();
+            }
+            stack_->enable_callbacks();
+        } else {
+            if (stack_.get() != nullptr) {
+                stack_->disable_callbacks();
+            }
+        }
+    }
+
+    inline logical_address_t decode_pointer(logical_address_t address) final {
+        if (!this->ctx_->cc_enabled()) {
+            return address;
+        }
+
+        if (this->stack_ && stack_->is_encoded_sp(address))
+            return stack_->decode_sp(address);
+
+        return C3BaseModel<ConTy, CtxTy, PtrEncTy>::decode_pointer(address);
+    }
+
+    inline bool check_memory_access(logical_address_t la, enum RW rw,
+                                    const uint8_t *data, size_t size) final {
+        if (stack_) {
+            if (!stack_->check_memory_access(la, this->la_encoded_, rw)) {
+                return false;
+            }
+        }
+
+        return C3BaseModel<ConTy, CtxTy, PtrEncTy>::check_memory_access(
+                la, rw, data, size);
+    }
+
+    inline uint64_t get_data_tweak(logical_address_t la) final {
+        if (stack_ && stack_->is_encoded_sp(la))
+            return stack_->get_data_tweak(la);
+        return C3BaseModel<ConTy, CtxTy, PtrEncTy>::get_data_tweak(la);
     }
 
     static inline void register_attributes(conf_class_t *cl) {

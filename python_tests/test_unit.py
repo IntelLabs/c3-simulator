@@ -2,7 +2,8 @@ import pytest
 import os
 import re
 import sys
-from python_tests.common import SimicsInstance
+from python_tests.common import SimicsInstance, lim_models, stack_models, \
+                                heap_models, default_models
 
 DEBUG_TEST_RUNNER = False
 
@@ -41,22 +42,6 @@ TEST_HEADER_LABELS = ["envp", "ld_flags", "should_fail", "cxx_flags", "model",
 gtest_script 			= "unit_tests/runtest_common.simics"
 generic_script          = "scripts/runworkload_common.simics"
 src_path = "unit_tests/"
-
-default_models=[ "native" ]
-
-heap_models=[ "c3", "c3-integrity", "c3-integrity-intra" ]
-
-
-
-
-default_models.extend(heap_models)
-
-
-
-
-lim_models=[ "lim" ]
-lim_models.extend([ "lim_disp", "lim-trace" ])
-default_models.extend(lim_models)
 
 slow_tests = [
     "malloc_test.cpp",
@@ -205,14 +190,17 @@ def get_unwind_args(request):
         return [ "unwinder=llvm_libunwind" ]
     return [ "unwinder=default_unwinder" ]
 
-def get_model_class(model):
+def get_model_match_list(model):
+    model_labels = [ "*", model ]
     if model in heap_models:
-        return "cc"
-
-
+        model_labels.append("cc")
+# #ifdef CC_ZTS_ENABLE
+    if model.endswith("-zts"):
+        model_labels.append("zts")
+# #endif  // CC_ZTS_ENABLE
     if model in lim_models:
-        return "lim"
-    return model
+        model_labels.append("lim")
+    return model_labels
 
 def get_include_file(src_file):
     assert src_file.endswith(".cpp")
@@ -231,6 +219,9 @@ def get_include_file(src_file):
 def get_obj_files(request, testcase, model):
     """Get obj_files Simics arg"""
     obj_files = os.path.basename(testcase.filename)
+    if (request.config.getoption("--no-upload")):
+        # Assume files are already on the checkpoint
+        obj_files = testcase.filename
 
     if has_kernel(request):
         obj_files += " /usr/lib/x86_64-linux-gnu/libgtest.a"
@@ -270,51 +261,51 @@ def do_skip(request, testcase, model):
     """Check test file too see if it matches current run, otherwise skip"""
 
     found_model = False
-    for l in [ "*", model, get_model_class(model) ]:
+    for l in get_model_match_list(model):
         if testcase.has_model("model", l):
             found_model = True
     if not found_model:
-        pytest.skip(f"skippint, test not enabled for model")
+        pytest.skip(f"skipping {testcase}, test not enabled for {model}")
         return True
 
     # If --skip-slow, then skip tests listed in slow_test
     if skip_slow(request):
         if any(t for t in slow_tests if t == os.path.basename(testcase.filename)):
-            pytest.skip(f"skipping, slow test")
+            pytest.skip(f"skipping {testcase}, slow test")
             return True
 
     # Skip if need but don't have kernel
     if not has_kernel(request) and testcase.get_bool("need_kernel", False):
-        pytest.skip("sipping, requires kernel support")
+        pytest.skip(f"skipping {testcase}, requires kernel support")
         return True
 
     # Skip if have but cannot run with custom kernel
     if has_kernel(request) and testcase.get_bool("no_kernel", False):
-        pytest.skip("sipping, not compatible with kernel support")
+        pytest.skip(f"skipping {testcase}, not compatible with kernel support")
         return True
 
     # Skip if need but don't have libunwind
     if not has_libunwind(request) and testcase.get_bool("need_libunwind", False):
-        pytest.skip("skipping, requires libunwind")
+        pytest.skip(f"skipping {testcase}, requires libunwind")
         return True
 
     # Skip if explicitly excluded
-    for l in [ "*", model, get_model_class(model) ]:
+    for l in get_model_match_list(model):
         if testcase.has_model("nomodel", l):
-            pytest.skip("skipping, test explicitly disabled")
+            pytest.skip(f"skipping {testcase}, test explicitly disabled for {model}")
             return True
 
     # Intra-object tests currently require kernel checkpoint
     if model.endswith("-integrity-intra") and not has_kernel(request):
-        pytest.skip("skipping, intra-object tests on non C3-kernel")
+        pytest.skip(f"skipping {testcase}, intra-object tests on non C3-kernel")
         return True
 
     return False
 
 def do_xfail(testcase, model):
-    for l in [ "*", model, get_model_class(model) ]:
+    for l in get_model_match_list(model):
         if testcase.has_model("xfail", l):
-            pytest.xfail("marked as xfail for {model}")
+            pytest.xfail(f"xfail {testcase}, marked as xfail for {model}")
             return True
     return False
 
@@ -337,7 +328,8 @@ def parametrize_model(metafunc):
     if metafunc.config.getoption("nomodel"):
         nomodel = metafunc.config.getoption("nomodel")
         models = filter(
-            lambda m: not (m in nomodel or get_model_class(m) in nomodel),
+            # Keep only models that cannot be matched with the nomodel list
+            lambda m: not len(set(get_model_match_list(m)).intersection(set(nomodel))),
             models)
 
     metafunc.parametrize("model", models)
@@ -377,8 +369,6 @@ def test_rungtest(checkpoint, src_file, model, request):
 
     other_args = [
         "workload_name=" + src_basename + ".o",
-        "src_file=" + src_basename,
-        "src_path=" + src_dirname,
         "obj_files=\"" + get_obj_files(request, testcase, model) + "\"",
         "env_vars=\"" + get_env_vars(request, testcase, model) + "\"",
         "ld_flags=\"" + get_ld_flags(request, testcase, model) + "\"",
@@ -386,15 +376,22 @@ def test_rungtest(checkpoint, src_file, model, request):
         "include_folders=\"unit_tests/include/unit_tests\"",
     ]
 
+    if request.config.getoption("--no-upload"):
+        other_args.append("no_upload=TRUE")
+    else:
+        other_args.extend([
+            "src_file=" + src_basename,
+            "src_path=" + src_dirname
+        ])
+
     other_args.extend(testcase.get_split("simics_args", " "))
 
-    if has_kernel(request):
-        other_args.append("zts_legacy_always_on=FALSE")
-    else:
-        other_args.append("zts_legacy_always_on=TRUE")
 
 
-
+    if model.endswith("-castack"):
+        model = model.replace('-castack', '')
+        if not "enable_cc_castack=1" in other_args:
+            other_args.append("enable_cc_castack=1")
 
     if model.endswith("-integrity"):
         model = model.replace('-integrity', '')
@@ -408,6 +405,11 @@ def test_rungtest(checkpoint, src_file, model, request):
 
         # always add compiler
         other_args.append("compiler=/home/simics/llvm/llvm_install/bin/clang++")
+
+    if model.endswith("-nowrap"):
+        model = model.replace('-nowrap', '')
+        if not "enable_cc_nowrap=1" in other_args:
+            other_args.append("enable_cc_nowrap=1")
 
     if model == "lim-trace":
         model = "lim_disp"
@@ -429,4 +431,4 @@ def test_rungtest(checkpoint, src_file, model, request):
 
 def self_test():
     dbgprint("Running self_test")
-    assert get_model_class("lim_disp") == "lim"
+    assert "lim" in get_model_match_list("lim_disp")

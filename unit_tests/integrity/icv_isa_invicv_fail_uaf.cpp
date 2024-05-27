@@ -1,5 +1,5 @@
 // model: cc
-// nomodel: c3
+// nomodel: zts -zts -castack
 // simics_args: disable_cc_env=1 enable_integrity=1
 
 // NOTE: Kernel support not yet extended to Integrity

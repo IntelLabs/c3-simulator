@@ -1,10 +1,11 @@
 
-include scripts/make/xed.mk
+include $(project_dir)/scripts/make/xed.mk
 
 SIMICS_BIN ?= /opt/simics/simics-6/simics-latest/bin
 
 PATCHELF_PKG = patchelf-0.10.tar.gz
 PATCHELF_URL = https://codeload.github.com/NixOS/patchelf/tar.gz/refs/tags/0.10
+PATCHELF_LOCAL_PATH = /opt/simics/share/$(PATCHELF_PKG)
 
 FILES_TO_DECOMPRESS_Z += $(wildcard internal/spec/x264_17/run/BuckBunny.yuv.zst)
 FILES_TO_DECOMPRESS_Z += $(wildcard internal/spec/parest17/run/parest17.zst)
@@ -18,7 +19,11 @@ simics:
 	$(SIMICS_BIN)/project-setup --ignore-existing-files .
 
 $(PATCHELF_PKG):
+ifneq ("$(wildcard $(PATCHELF_LOCAL_PATH))","")
+	cp $(PATCHELF_LOCAL_PATH) .
+else
 	curl -o $@ $(PATCHELF_URL)
+endif
 
 $(FILES_TO_DECOMPRESS) : % : %.zst
 	test -e $@ || zstd -d $^

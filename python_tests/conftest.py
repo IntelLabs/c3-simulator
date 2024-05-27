@@ -16,6 +16,7 @@ def pytest_addoption(parser):
     parser.addoption("--have-kernel", action="store_true", default=False, help="Enable tests that require kernel support")
     parser.addoption("--upload-glibc", action="store_true", default=False, help="Pass upload_glibc=1 to simics")
     parser.addoption("--skip-slow", action="store_true", default=False, help="May skip some slower unit tests (off by default)")
+    parser.addoption("--no-upload", action="store_true", default=False, help="Don't upload any files to the system")
 
 @pytest.fixture
 def checkpoint(request):

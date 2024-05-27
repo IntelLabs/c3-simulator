@@ -1,7 +1,10 @@
 // model: cc
 // no_kernel: yes
+// nomodel: -zts
+// xfail: -castack
 
 // NOTE: Kernel support not yet extended to GSRIP
+// NOTE: Stack hardening not yet compatible with GSRIP
 
 // #define DEBUG
 
@@ -19,7 +22,7 @@ void *(*g_get_rip_rel_lea_ptr)(void);
 #define asm_lea(offset, res)                                                   \
     do {                                                                       \
         asm volatile("lea " #offset "(%%rip), %[_res]\n\t;"                    \
-                     : [ _res ] "+r"(res)                                      \
+                     : [_res] "+r"(res)                                        \
                      :                                                         \
                      :);                                                       \
     } while (0)
@@ -68,11 +71,14 @@ TEST(ShadowRip, call_ret) {
     void *la = get_rip_rel_lea();
 
     // Enable shadow rip, but don't set its value!
+    dbgprint("Enabling shadow_rip");
     set_and_enable_shadow_rip<uint64_t>(0);
 
-    // Now call the CA with the shadow rip!
+    // Now do indirect call using the CA with the shadow rip!
+    dbgprint("Indirect call with CA: %p", get_rip_rel_lea_ptr);
     void *gsripped_la = get_rip_rel_lea_ptr();
 
+    dbgprint("Done, disabling shadow_rip");
     set_cpu_shadow_rip_enabled(false);
 
     // The LEA results should be different now if call / ret set gsrip
@@ -173,6 +179,43 @@ TEST(ShadowRip, call_global_mem_ret) {
     void *gsripped_la = g_get_rip_rel_lea_ptr();
 
     set_cpu_shadow_rip_enabled(false);
+
+    // The LEA results should be different now if call / ret set gsrip
+    ASSERT_NE(gsripped_la, la);
+}
+
+TEST(ShadowRip, call_reg) {
+    // Ugly trick to get gsrip that covers the get_rip_rel_lea function
+    auto gsrip = reinterpret_cast<uint64_t>(
+            gen_gsrip_range(&get_rip_rel_lea, &get_rip_rel_lea, 64));
+
+    g_get_rip_rel_lea_ptr = reinterpret_cast<void *(*)(void)>(gsrip);
+    const uint64_t check_val = gsrip;
+
+    // dbgprint("ptr    0x%016lx", (uint64_t)ptr);
+    dbgprint("gsrip  0x%016lx", (uint64_t)gsrip);
+
+    // Load once before configuring custom shadow rip
+    void *la = get_rip_rel_lea();
+
+    // Enable shadow rip, but don't set its value!
+    set_and_enable_shadow_rip<uint64_t>(0);
+
+    // Now call the CA with the shadow rip!
+    void *gsripped_la = g_get_rip_rel_lea_ptr();
+    asm volatile("mov %[ptr], %%r12 \n"
+                 "call %%r12        \n"
+                 "mov %%r12, %[ptr] \n"
+                 : [ptr] "+r"(g_get_rip_rel_lea_ptr)
+                 :
+                 : "rax", "rdi", "rsi", "rdx", "rcx", "r8", "r9", "r10", "r11",
+                   "cc", "memory");
+
+    set_cpu_shadow_rip_enabled(false);
+
+    // The g_get_rip_Rel_lea_ptr function pointer should be the same as its
+    // value was stored in the callee-saved r12 register.
+    ASSERT_EQ(check_val, (uint64_t)g_get_rip_rel_lea_ptr);
 
     // The LEA results should be different now if call / ret set gsrip
     ASSERT_NE(gsripped_la, la);

@@ -1,0 +1,209 @@
+decl {
+! Script that runs the Quick Start Platform (QSP) with a modern processor core.
+
+ param bios_debug : int =0
+ param app_debug : int = 0
+ !switches between debug and release images
+
+ param compiler : string = "GCC5"
+ !allow a different toolchain to be used
+
+ param uefi_app : string = "Demo1_Example_App.efi"
+ param disable_ptrenc : int = 0
+ param disable_data_encryption : int = 0
+ param enable_integrity : int = 0
+ param magic : int = 0
+ param allow_scan : int = 0
+ param logfile : string = "debug/debug"
+
+ params from "%simics%/targets/qsp-x86/qsp-clear-linux.simics"
+  default cpu_comp_class = "x86QSP2"
+  default num_cores = 1
+  default num_threads = 1
+}
+
+$disk1_image="%simics%/targets/common/images/simics_agent_efi.img"
+#$compiler = "CLANGDWARF"
+#$compiler = "GCC5"
+$build_type = "DEBUG"
+if $bios_debug == 0 {
+	$build_type = "RELEASE"
+}
+
+$build_base_path = "%simics%/edk2_src/Build/SimicsOpenBoardPkg/BoardX58Ich10"
+$build_base_path = "%s/%s_%s" % [ $build_base_path, $build_type, $compiler]
+
+$uefi_app_path = (lookup-file "%s/X64/%s" % [$build_base_path, $uefi_app])
+$bios_image = (lookup-file "%s/FV/BOARDX58ICH10.fd" % [$build_base_path])
+echo "using $debug_type image: " + $bios_image
+
+run-command-file "%simics%/targets/qsp-x86/qsp-clear-linux.simics" create_disk1=sata
+start-command-line-capture -overwrite filename = "%s.txt" % $logfile
+
+if not defined system { $system = "board" }
+if $bios_debug == 0 {
+	$system.serconsole.con.hide
+}
+$con = $system.console.con
+$system.software.delete-tracker
+
+# NOTE: The Simics debug tracker seems to choke on CAs
+#
+# $tracker = ($system.software.insert-tracker tracker = uefi_fw_tracker_comp)
+# $map_file = "%s/SimicsX58.map" % [$build_base_path]
+# $tracker.detect-parameters -overwrite param-file = my_uefi.params map-file = $map_file
+# $tracker.load-parameters my_uefi.params
+# $system.software.enable-tracker
+
+output-radix 16
+
+new-cc-model -connect-all
+cc0_0->break_on_decode_fault = TRUE
+cc0_0->gsrip_enabled = TRUE
+
+if $enable_integrity == 1 {
+	cc0_0->integrity = TRUE
+	# Disable integrity checks during EDK2 launch
+	cc0_0->integrity_correct_on_fail = FALSE
+	cc0_0->integrity_break_on_read_mismatch = TRUE
+	cc0_0->integrity_break_on_write_mismatch = TRUE
+	cc0_0->integrity_fault_on_write_mismatch = TRUE
+	cc0_0->integrity_fault_on_read_mismatch = TRUE
+	cc0_0->integrity_warn_on_read_mismatch = TRUE
+} else {
+	cc0_0->integrity = FALSE
+}
+
+if $disable_ptrenc == 1 {
+	cc0_0->cc_isa_ptrenc = FALSE
+}
+
+if $disable_data_encryption == 1 {
+	cc0_0->disable-data-encryption = TRUE
+}
+
+#cc0_0->debug_on = TRUE
+
+bp.console_string.break board.serconsole.con "pre-relocation"
+
+$time_to_bios_menu = 12
+if $bios_debug == 0 {
+	$time_to_bios_menu = 3
+}
+
+if $magic == 1 { enable-magic-breakpoint }
+
+echo
+echo "Pre-start configuration:"
+echo
+echo "\tcc_isa_ptrenc:                      %i" % [cc0_0->cc_isa_ptrenc]
+echo "\tdisable_data_encryption:            %i" % [cc0_0->disable_data_encryption]
+echo "\tintegrity:                          %i" % [cc0_0->integrity]
+echo "\tintegrity_correct_on_fail:          %i" % [cc0_0->integrity_correct_on_fail]
+echo "\tintegrity_break_on_write_mismatch:  %i" % [cc0_0->integrity_break_on_write_mismatch]
+echo "\tintegrity_break_on_read_mismatch:   %i" % [cc0_0->integrity_break_on_read_mismatch]
+echo "\tintegrity_fault_on_write_mismatch:  %i" % [cc0_0->integrity_fault_on_write_mismatch]
+echo "\tintegrity_warn_on_read_mismatch:    %i" % [cc0_0->integrity_warn_on_read_mismatch]
+echo
+
+script-branch {
+        bp.time.wait-for $time_to_bios_menu
+
+        # Open UEFI BIOS setup
+        $con.input -e F2
+        bp.time.wait-for 5
+
+        # Go to boot manager
+        $con.input -e Down
+        $con.input -e Down
+        $con.input -e Enter
+        bp.time.wait-for 5
+
+        # Open EFI shell
+		$con.input -e Up
+        $con.input -e Enter
+        bp.time.wait-for 10
+
+		# FS1
+		$con.input "fs1:\n"
+        bp.time.wait-for 3
+
+		# Upload UEFI app
+		#
+		# Disable CA encoding as CAs interfere with the Simics agent.
+		cc0_0->cc_isa_ptrenc = FALSE
+		# Run Simics agent
+		$con.input "SimicsAgent.efi\n"
+        bp.time.wait-for 3
+		# Upload app
+		start-agent-manager
+		$agent = (agent_manager.connect-to-agent)
+		$agent.upload $uefi_app_path
+		$agent.wait-for-job
+		$agent.agent-quit
+		$agent.wait-for-job
+		$agent.delete-handle
+		bp.time.wait-for 3
+		# Re-enable pointer encoding ISA
+		if $disable_ptrenc != 1 {
+			cc0_0->cc_isa_ptrenc = TRUE
+		}
+
+		# Start logging console output from app
+		board.serconsole.con.capture-start -overwrite "%s.serconsole.txt" % $logfile
+
+		# Prepare command line
+		$con.input ("%s" % $uefi_app)
+		bp.time.wait-for 3
+		stop
+
+		# Enable C3 functionality
+		if $enable_integrity == 1 {
+			cc0_0->integrity_break_on_read_mismatch = FALSE
+			cc0_0->integrity_break_on_write_mismatch = FALSE
+			cc0_0->integrity_fault_on_write_mismatch = TRUE
+			cc0_0->integrity_fault_on_read_mismatch = TRUE
+			cc0_0->integrity_warn_on_read_mismatch = TRUE
+
+			if $allow_scan == 1 {
+				cc0_0->integrity_correct_on_fail = TRUE
+			} else {
+				cc0_0->integrity_correct_on_fail = FALSE
+			}
+		}
+
+		echo
+  		echo "Start application run"
+  		echo
+  		echo "configuration:"
+  		echo "\tcc_isa_ptrenc:                      %i" % [cc0_0->cc_isa_ptrenc]
+  		echo "\tdisable_data_encryption:            %i" % [cc0_0->disable_data_encryption]
+  		echo "\tintegrity:                          %i" % [cc0_0->integrity]
+  		echo "\tintegrity_correct_on_fail:          %i" % [cc0_0->integrity_correct_on_fail]
+  		echo "\tintegrity_break_on_write_mismatch:  %i" % [cc0_0->integrity_break_on_write_mismatch]
+  		echo "\tintegrity_break_on_read_mismatch:   %i" % [cc0_0->integrity_break_on_read_mismatch]
+  		echo "\tintegrity_fault_on_write_mismatch:  %i" % [cc0_0->integrity_fault_on_write_mismatch]
+  		echo "\tintegrity_warn_on_read_mismatch:    %i" % [cc0_0->integrity_warn_on_read_mismatch]
+  		echo
+
+		if $app_debug == 1 {
+			cc0_0->debug_on = TRUE
+			board.mb.cpu0.core[0][0].log-level 3
+		}
+
+		# Run app by send newline to send prepared command line
+		run
+		$con.input ("\n")
+
+		# This doesn't work reliably, so may need to stop manually
+		$uefi_prompt="FS1:.>"
+		$smrr_access="Access to SMRR region when not in SMM mode"
+		bp.console_string.wait-for $con -regexp ("(%s)|(%s)" % [$uefi_prompt, $smrr_access])
+
+		bp.time.wait-for 3
+		stop
+}
+
+enable-real-time-mode
+(psel).debug
+run

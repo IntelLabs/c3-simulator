@@ -116,7 +116,7 @@ TEST(STRING, mallocwcsnlenrandomsize) {
 
 TEST(STRING, wcscpy) {
     const wchar_t str1[] = L"abcdefgh01235678";
-    int length = wcslen(str1);
+    int length = wcslen(str1) + 1;
     wchar_t *str2;
     str2 = (wchar_t *)malloc(sizeof(wchar_t) * length);
     wcscpy(str2, str1);
@@ -167,11 +167,11 @@ TEST(STRING, mallocwcscpyrandomsize) {
 
 TEST(STRING, wcsncpy) {
     const wchar_t str1[] = L"abcdefABCDEF012356";
-    int length = wcslen(str1);
+    int length = wcslen(str1) + 1;
     const wchar_t str_expected[] = L"abcdefABCD";
     int expstr_length = wcslen(str_expected);
     wchar_t *str2;
-    str2 = (wchar_t *)malloc(sizeof(wchar_t) * length);
+    str2 = (wchar_t *)malloc(sizeof(wchar_t) * length + 1);
     wcsncpy(str2, str1, expstr_length);
     str2[expstr_length] = '\0';
     ASSERT_STREQ(str2, str_expected);
@@ -223,11 +223,11 @@ TEST(STRING, mallocwcsncpyrandomsize) {
 
 TEST(STRING, wcscat) {
     const wchar_t str1[] = L"abcdefghABCDEFGH";
-    int length1 = wcslen(str1);
+    int length1 = wcslen(str1) + 1;
     const wchar_t str2[] = L"0123456789";
-    int length2 = wcslen(str2);
+    int length2 = wcslen(str2) + 1;
     const wchar_t str_expected[] = L"abcdefghABCDEFGH0123456789";
-    int expstr_length = wcslen(str_expected);
+    int expstr_length = wcslen(str_expected) + 1;
     wchar_t *str3;
     str3 = (wchar_t *)malloc(sizeof(wchar_t) * (expstr_length * 2));
     wcscpy(str3, str1);
@@ -290,11 +290,11 @@ TEST(STRING, mallocwcscatrandomsize) {
 
 TEST(STRING, wcsncat) {
     const wchar_t str1[] = L"abcdefghABCDEFGH";
-    int length1 = wcslen(str1);
+    int length1 = wcslen(str1) + 1;
     const wchar_t str2[] = L"0123456789";
-    int length2 = wcslen(str2);
+    int length2 = wcslen(str2) + 1;
     const wchar_t str_expected[] = L"0123456789abcdefghABCD";
-    int expstr_length = wcslen(str_expected);
+    int expstr_length = wcslen(str_expected) + 1;
     wchar_t *str3;
     str3 = (wchar_t *)malloc(sizeof(wchar_t) * (expstr_length * 2));
     wcscpy(str3, str2);

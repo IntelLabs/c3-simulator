@@ -25,7 +25,7 @@ typedef struct _charVoid {
 } charVoid;
 
 // This is a negative test, and should fail.
-TEST(Integrity, test_icv_rep_movs_juliet_z_bad) {
+TEST(Integrity, icv_intra_obj_tripwire_bad) {
     if (!is_model("native")) {
         cc_set_icv_enabled(true);
     }

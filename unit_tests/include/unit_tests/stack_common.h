@@ -38,7 +38,7 @@ static __attribute((noinline)) void __dump_rsp() {
  */
 #define get_sp(_val)                                                           \
     do {                                                                       \
-        __asm("mov %%rsp, %[r];\n\t" : [ r ] "=r"(_val) : :);                  \
+        __asm("mov %%rsp, %[r];\n\t" : [r] "=r"(_val) : :);                    \
     } while (false)
 
 /**
@@ -54,6 +54,10 @@ static __attribute((noinline)) void __dump_rsp() {
  * @brief Allocate and leak a stack buffer to force compiler to push %rbp
  */
 #define force_rbp_store()                                                      \
-    __s_leak_ptr = alloca(__s_buff_size < 64 ? ++__s_buff_size : __s_buff_size)
+    do {                                                                       \
+        __asm__ __volatile("nop" : : "b"(&__s_buff_size) : "memory");          \
+        __s_leak_ptr =                                                         \
+                alloca(__s_buff_size < 64 ? ++__s_buff_size : __s_buff_size);  \
+    } while (0)
 
 #endif  // UNIT_TESTS_INCLUDE_UNIT_TESTS_STACK_COMMON_H_

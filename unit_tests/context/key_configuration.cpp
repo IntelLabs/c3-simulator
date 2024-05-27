@@ -1,6 +1,6 @@
 // model: *
-// nomodel: lim zts -integrity
-// xfail: zts
+// nomodel: lim -integrity
+// xfail: zts -castack -zts
 // TODO(hliljest): test currently relies on heap, should extend to stack-only
 
 #include <unistd.h>
@@ -37,6 +37,7 @@ TEST(TCLASS, test_key_configuration) {
     struct cc_context new_ctx;
     cc_save_context(&new_ctx);
     new_ctx.dp_key_bytes_[0]++;
+    new_ctx.ds_key_bytes_[0]++;
     cc_load_context(&new_ctx);
 
     // Then copy to our plaintext buffer
@@ -49,7 +50,7 @@ TEST(TCLASS, test_key_configuration) {
 
     MAGIC(0);
 
-    // Check we read different things while data key was changed
+    // Check we read different things after data keys were changed
     ASSERT_NE(0, std::memcmp(plaintext_buff, buff, STR_LEN));
 }
 

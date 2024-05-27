@@ -6,20 +6,21 @@
 
 using namespace std;
 
-static inline void test_decryption(char *const c_ptr) {
-    const char c = 'A';
+static inline void test_decryption(uint64_t *const c_ptr) {
+    //const char c = 'A';
+    const uint64_t c = 0xDEADBEEF;
     // MAGIC(0);
     *c_ptr = c;
     // MAGIC(0);
 
     ASSERT_EQ(*c_ptr, c);
 
-    char *dec_c_ptr = cc_dec_if_encoded_ptr(c_ptr);
+    uint64_t *dec_c_ptr = cc_dec_if_encoded_ptr(c_ptr);
 
     // fprintf(stderr, "c_ptr:      %016lx\n", (uint64_t) c_ptr);
     // fprintf(stderr, "dec_c_ptr:  %016lx\n", (uint64_t) dec_c_ptr);
-    // fprintf(stderr, "*c_ptr:     %016lx\n", *c_ptr);
-    // fprintf(stderr, "*dec_c_ptr: %016lx\n", *dec_c_ptr);
+    // fprintf(stderr, "*c_ptr:     %016lx\n", (uint64_t) *c_ptr);
+    // fprintf(stderr, "*dec_c_ptr: %016lx\n", (uint64_t) *dec_c_ptr);
 
     // Make sure we can read back the same value
     ASSERT_TRUE(*c_ptr == c);
@@ -28,19 +29,19 @@ static inline void test_decryption(char *const c_ptr) {
                 (c_ptr != dec_c_ptr || *c_ptr != *dec_c_ptr));
 
     // Make sure write to *LA garbles *CA (if c_ptr is CA)
-    const char c_old = *c_ptr;
+    const uint64_t c_old = *c_ptr;
     *dec_c_ptr = c;
     ASSERT_TRUE(!is_encoded_cc_ptr(c_ptr) || *c_ptr != c);
 }
 
 TEST(DecrypPtrTest, heap) {
-    char *c_ptr = (char *)malloc(sizeof(char));
+    uint64_t *c_ptr = (uint64_t *)malloc(sizeof(uint64_t));
     test_decryption(c_ptr);
 }
 
 TEST(DecrypPtrTest, stack) {
-    char c;
-    char *c_ptr = &c;
+    uint64_t c;
+    uint64_t *c_ptr = &c;
 
     test_decryption(c_ptr);
 }

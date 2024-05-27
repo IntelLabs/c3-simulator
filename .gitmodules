@@ -7,3 +7,15 @@
 [submodule "linux/src"]
 	path = linux/src
 	url = https://github.com/IntelLabs/c3-linux.git
+[submodule "edk2_src/edk2"]
+	path = edk2_src/edk2
+	url = https://github.com/IntelLabs/c3-edk2.git
+[submodule "edk2_src/edk2-non-osi"]
+	path = edk2_src/edk2-non-osi
+	url = https://github.com/tianocore/edk2-non-osi
+[submodule "edk2_src/FSP"]
+	path = edk2_src/FSP
+	url = https://github.com/intel/FSP
+[submodule "edk2_src/edk2-platforms"]
+	path = edk2_src/edk2-platforms
+	url = https://github.com/IntelLabs/c3-edk2-platforms.git

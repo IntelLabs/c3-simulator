@@ -101,21 +101,6 @@ class C3BaseModel {
     inline void modify_data_on_mem_access(memory_handle_t *mem, enum RW rw);
 
     /**
-     * @brief Exception handler
-     *
-     * If this callback is registered, it will trigger a Simics breakpoint
-     * on exception if the break_on_decode_fault Simics option is set.
-     *
-     * @param obj
-     * @param cpu
-     * @param eq_handle
-     * @param unused
-     */
-    inline void exception_before(conf_object_t *obj, conf_object_t *cpu,
-                                 exception_handle_t *eq_handle,
-                                 lang_void *unused);
-
-    /**
      * @brief
      *
      */
@@ -501,20 +486,6 @@ void C3BaseModel<ConnectionTy, CtxTy, PtrEncTy>::modify_data_on_mem_access(
         this->la_decoded_ = this->la_decoded_ + bytes.size;
         this->is_crossing_page_first_ = false;
         this->is_crossing_page_second_ = true;
-    }
-}
-
-template <typename ConnectionTy, typename CtxTy, typename PtrEncTy>
-void C3BaseModel<ConnectionTy, CtxTy, PtrEncTy>::exception_before(
-        conf_object_t *obj, conf_object_t *cpu, exception_handle_t *eq_handle,
-        lang_void *unused) {
-    auto *con = static_cast<ConnectionTy *>(SIM_object_data(obj));
-    if (con->break_on_decode_fault) {
-        int exc_num = con->eq_iface->exception_number(cpu, eq_handle);
-        if (exc_num < 32 && exc_num != 14) {
-            SIM_printf("Breaking on exception #%d\n", exc_num);
-            SIM_break_simulation("Break on exception");
-        }
     }
 }
 
