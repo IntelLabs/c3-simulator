@@ -29,6 +29,9 @@ readonly CC_CA_STACK_ENABLE=${CC_CA_STACK_ENABLE:="1"}
 readonly GLIBC_MULTIARCH=${GLIBC_MULTIARCH:="0"}
 readonly CC_NO_WRAP_ENABLE=${CC_NO_WRAP_ENABLE:="0"}
 
+# Set MAKEFLAGS to emtpy string if it isn't defined
+MAKEFLAGS=${MAKEFLAGS:=""}
+
 [[ "$(echo "$MAKEFLAGS" | awk '{print $1}')" == *n* ]] && dry=1
 dry=${dry:="0"}
 
