@@ -1,7 +1,6 @@
-/*
- Copyright (C) 2023 Intel Corporation
- SPDX-License-Identifier: MIT
-*/
+// Copyright 2023-2024 Intel Corporation
+// SPDX-License-Identifier: MIT
+
 #include <malloc.h>
 #include <unistd.h>
 #include <climits>
@@ -47,7 +46,6 @@ int main(int argc, char **argv) {
     const auto slot_max_index = (uint64_t)is_encoded_cc_ptr(str)
                                         ? ca_get_inbound_offset(str, UINT_MAX)
                                         : INT_MAX;
-
 
     printf("str CA %p, corresponds to LA %p\n", str, la_str);
     printf("str CA has power-slot of size %lu, and maximum in-slot index: "

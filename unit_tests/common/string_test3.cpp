@@ -1,3 +1,6 @@
+// Copyright 2024 Intel Corporation
+// SPDX-License-Identifier: MIT
+
 // model: *
 #include <assert.h>
 #include <ctype.h>
@@ -31,7 +34,7 @@ TEST(STRING, strcasecmp) {
     const char str1[] = "ABCDEFrtyhjfGHACBkleqdgbmcKLQSWTXYZ";
     char *str2;
     size_t str_length = strlen(str1);
-    str2 = (char *)malloc(sizeof(char) * str_length);
+    str2 = (char *)malloc(sizeof(char) * (1 + str_length));
     strcpy(str2, str1);
     char *str3 = str2;
     while (*str3) {
@@ -45,7 +48,11 @@ TEST(STRING, strcasecmp) {
 TEST(STRING, mallocstrcasecmp) {
     srand(SRAND_SEED);
     char *buff, *str_offset, *str;
-    size_t max_length = 128;
+#ifdef KEEP_SLOW  // Moved to string_test3_slow.cpp
+    const size_t max_length = 128;
+#else
+    const size_t max_length = 48;
+#endif
     for (size_t alloc_length = 2; alloc_length < max_length; alloc_length++) {
         buff = (char *)malloc(sizeof(char) * (alloc_length + 17));
         for (int offset = 0; offset < 16; offset++) {
@@ -114,7 +121,7 @@ TEST(STRING, strncasecmp) {
     const char str1[] = "ABCDEFrtyhjfGHACBkleqdgbmcKLQSWTXYZ";
     char *str2;
     size_t str_length = strlen(str1);
-    str2 = (char *)malloc(sizeof(char) * str_length);
+    str2 = (char *)malloc(sizeof(char) * (1 + str_length));
     strcpy(str2, str1);
     char *str3 = str2;
     while (*str3) {
@@ -128,7 +135,11 @@ TEST(STRING, strncasecmp) {
 TEST(STRING, mallocstrncasecmp) {
     srand(SRAND_SEED);
     char *buff, *str_offset, *str;
-    size_t max_length = 128;
+#ifdef KEEP_SLOW  // Moved to string_test3_slow.cpp
+    const size_t max_length = 128;
+#else
+    const size_t max_length = 48;
+#endif
     for (size_t alloc_length = 5; alloc_length < max_length; alloc_length++) {
         buff = (char *)malloc(sizeof(char) * (alloc_length + 17));
         for (int offset = 0; offset < 16; offset++) {
@@ -206,9 +217,9 @@ TEST(STRING, mallocstrncasecmprandomsize) {
 TEST(STRING, strcmp) {
     char *str1, *str2;
     size_t str_length = 100;
-    str1 = (char *)malloc(sizeof(char) * str_length);
+    str1 = (char *)malloc(sizeof(char) * (1 + str_length));
     fill_string(str1, str_length);
-    str2 = (char *)malloc(sizeof(char) * strlen(str1));
+    str2 = (char *)malloc(sizeof(char) * (1 + strlen(str1)));
     strcpy(str2, str1);
     ASSERT_FALSE(strcmp(str1, str2));
     free(str1);
@@ -218,7 +229,11 @@ TEST(STRING, strcmp) {
 TEST(STRING, mallocstrcmp) {
     srand(SRAND_SEED);
     char *buff, *str_offset, *str;
-    size_t max_length = 128;
+#ifdef KEEP_SLOW  // Moved to string_test3_slow.cpp
+    const size_t max_length = 128;
+#else
+    const size_t max_length = 64;
+#endif
     for (size_t alloc_length = 2; alloc_length < max_length; alloc_length++) {
         buff = (char *)malloc(sizeof(char) * (alloc_length + 17));
         for (int offset = 0; offset < 16; offset++) {
@@ -265,7 +280,11 @@ TEST(STRING, mallocstrcmprandomsize) {
 
 TEST(STRING, mallocstrncmp) {
     char *buff, *str_offset, *str;
-    size_t max_length = 128;
+#ifdef KEEP_SLOW  // Moved to string_test3_slow.cpp
+    const size_t max_length = 128;
+#else
+    const size_t max_length = 64;
+#endif
     for (size_t alloc_length = 5; alloc_length < max_length; alloc_length++) {
         buff = (char *)malloc(sizeof(char) * (alloc_length + 17));
         for (int offset = 0; offset < 16; offset++) {
@@ -321,7 +340,7 @@ TEST(STRING, strstr) {
     char *str1;
     const char str2[] = "abcdefgh";
     size_t str_length = 100;
-    str1 = (char *)malloc(sizeof(char) * str_length);
+    str1 = (char *)malloc(sizeof(char) * (1 + str_length));
     fill_string(str1, str_length);
     ASSERT_NE(strstr(str1, str2), nullptr);
     free(str1);
@@ -330,7 +349,11 @@ TEST(STRING, strstr) {
 TEST(STRING, mallocstrstr) {
     srand(SRAND_SEED);
     char *buff, *str_offset, *str;
-    size_t max_length = 128;
+#ifdef KEEP_SLOW  // Moved to string_test3_slow.cpp
+    const size_t max_length = 128;
+#else
+    const size_t max_length = 48;
+#endif
     for (size_t alloc_length = 5; alloc_length <= max_length; alloc_length++) {
         buff = (char *)malloc(sizeof(char) * (alloc_length + 17));
         for (int offset = 0; offset < 16; offset++) {
@@ -380,7 +403,7 @@ TEST(STRING, strcasestr) {
     char *str1;
     const char str2[] = "AbCdEfGHijk";
     size_t str_length = 100;
-    str1 = (char *)malloc(sizeof(char) * str_length);
+    str1 = (char *)malloc(sizeof(char) * (1 + str_length));
     fill_string(str1, str_length);
     ASSERT_TRUE(strcasestr(str1, str2));
     free(str1);
@@ -389,7 +412,11 @@ TEST(STRING, strcasestr) {
 TEST(STRING, mallocstrcasestr) {
     srand(SRAND_SEED);
     char *buff, *str_offset, *str;
-    size_t max_length = 128;
+#ifdef KEEP_SLOW  // Moved to string_test3_slow.cpp
+    const size_t max_length = 128;
+#else
+    const size_t max_length = 48;
+#endif
     for (size_t alloc_length = 5; alloc_length < max_length; alloc_length++) {
         buff = (char *)malloc(sizeof(char) * (alloc_length + 17));
         for (int offset = 0; offset < 16; offset++) {
@@ -424,7 +451,11 @@ TEST(STRING, mallocstrcasestr) {
 TEST(STRING, mallocstrcasestrrandsize) {
     srand(SRAND_SEED);
     char *buff, *str_offset, *str;
+#ifdef KEEP_SLOW  // Moved to string_test3_slow.cpp
     size_t max_length = 4096 * 4;
+#else
+    size_t max_length = 2048;
+#endif
     size_t alloc_length;
     for (size_t i = 1; i <= 100; i++) {
         alloc_length = rand() % max_length + 17;
@@ -460,11 +491,16 @@ TEST(STRING, mallocstrtok) {
     char delim[] = "}";
     size_t str_length = 93;
     size_t max_length = 128;
-    str = (char *)malloc(sizeof(char) * max_length);
+#ifdef KEEP_SLOW  // Moved to string_test3_slow.cpp
+    size_t offset_diff = 1;
+#else
+    size_t offset_diff = 4;
+#endif
+    str = (char *)malloc(sizeof(char) * (1 + max_length));
     fill_string(str, str_length - 1);
     for (size_t alloc_length = 5; alloc_length < max_length; alloc_length++) {
         buff = (char *)malloc(sizeof(char) * (alloc_length + 17));
-        for (int offset = 0; offset < 16; offset++) {
+        for (int offset = 0; offset < 16; offset += offset_diff) {
             str_offset = buff + offset;
             for (size_t length_expected = 3; length_expected < alloc_length;
                  length_expected++) {
@@ -546,7 +582,11 @@ TEST(STRING, mallocstpcpyrandomsize) {
 TEST(STRING, mallocstpncpy) {
     srand(SRAND_SEED);
     char *buff, *str_offset, *str;
+#ifdef KEEP_SLOW  // Moved to string_test3_slow.cpp
     size_t max_length = 128;
+#else
+    size_t max_length = 48;
+#endif
     for (size_t alloc_length = 5; alloc_length < max_length; alloc_length++) {
         buff = (char *)malloc(sizeof(char) * (alloc_length + 17));
         for (int offset = 0; offset < 16; offset++) {

@@ -1,5 +1,8 @@
+// Copyright 2024 Intel Corporation
+// SPDX-License-Identifier: MIT
+
 // model: cc-integrity c3-integrity
-// simics_args: enable_integrity=1
+// simics_args: enable_integrity=TRUE
 // should_fail: yes
 // xfail: *
 

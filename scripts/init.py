@@ -1,3 +1,6 @@
+# Copyright 2016-2024 Intel Corporation
+# SPDX-License-Identifier: MIT
+
 from __future__ import print_function
 from simics import *
 from re import search
@@ -12,6 +15,20 @@ def cmd_to_shell(cmd):
 def strip_anci(string):
     ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
     return ansi_escape.sub('', string)
+
+def check_vars_defined(vars):
+    bad = False
+    for v in vars.split():
+        if not v in simenv:
+            bad = True
+            print("Error: variable " + v + " not defined.")
+        elif simenv[v] == "":
+            bad = True
+            print("Error: variable " + v + " is empty.")
+        elif simenv[v] == None:
+            bad = True
+            print("Error: variable " + v + " is None.")
+    run_command("exit")
 
 def command_to_console(cmd, nofail=False):
     # Fixes at least some crashes with missed return values
@@ -38,7 +55,7 @@ def is_ubuntu():
 
 # Preserves permissions, as opposed to matic0.upload-dir -follow
 def upload_tarball(path):
-    print("uload_tarbal({})".format(path))
+    print("uload_tarball({})".format(path))
     res = os.system("tar -chzf temp.tar " + path)
     if res != 0:
         sys.exit(2)
@@ -67,7 +84,7 @@ def getCkpt():
         config = rlinput("What configuration file do you want to use?", getLatestCkptFromDir())
     return config
 
-def sychronizeGuestDate():
+def synchronizeGuestDate():
     out = subprocess.Popen(["LC_ALL=en.EN date"], stdout=subprocess.PIPE, shell=True).communicate()[0].decode("utf-8").rstrip()
     command_to_console("sudo date --set '" + out + "'")
 
@@ -93,7 +110,7 @@ def copy_many_files(files, srcDir="", dstDir="/home/simics"):
 def copy_include_folders(folders):
     command_to_console("mkdir -p include")
     for path in folders.split(" "):
-        print(f"transfering include folder {path}")
+        print(f"transferring include folder {path}")
 
         cmd_to_shell(f"mkdir -p tmp")
         tarball_fn = f"{next(tempfile._get_candidate_names())}.tar"

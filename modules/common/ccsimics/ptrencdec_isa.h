@@ -1,7 +1,6 @@
-/*
- Copyright 2016 Intel Corporation
- SPDX-License-Identifier: MIT
-*/
+// Copyright 2016-2024 Intel Corporation
+// SPDX-License-Identifier: MIT
+
 #ifndef MODULES_COMMON_CCSIMICS_PTRENCDEC_ISA_H_
 #define MODULES_COMMON_CCSIMICS_PTRENCDEC_ISA_H_
 
@@ -10,7 +9,7 @@ extern "C" {
 }
 #include "ccsimics/data_encryption.h"
 #include "ccsimics/xed_util.h"
-#include "malloc/cc_globals.h"
+#include "c3/malloc/cc_globals.h"
 
 #define LOCK_OFFSET 1
 

@@ -1,5 +1,8 @@
 #! /usr/bin/env bash
 
+# Copyright 2016-2024 Intel Corporation
+# SPDX-License-Identifier: MIT
+
 set -euo pipefail
 
 cwd=$(dirname "$(realpath "$0")")
@@ -57,8 +60,12 @@ make_llvm() {
      [[ -n ${CC:=""} ]] && cmake_args+=( "-DCMAKE_C_COMPILER=${CC}" )
      [[ -n ${CXX:=""} ]] && cmake_args+=( "-DCMAKE_CXX_COMPILER=${CXX}" )
 
+     c3lib_path="$(cd "${cwd}"/../c3lib; pwd)"
+
      cmake_args+=(
           -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_CXX_FLAGS="-I${c3lib_path}"
+          -DCMAKE_C_FLAGS="-I${c3lib_path}"
           "-DCMAKE_INSTALL_PREFIX=${prefix}"
           -DLLVM_TARGETS_TO_BUILD=X86
           "-DLLVM_ENABLE_PROJECTS=${llvm_projects}"
@@ -76,6 +83,13 @@ make_llvm() {
           -DLLVM_INSTALL_UTILS=On
      )
 
+     if [[ -e "${HOME}/.c3-llvm-ccache" ]]; then
+          cmake_args+=(
+               -DLLVM_CCACHE_BUILD=On
+               -DLLVM_CCACHE_DIR="${HOME}/.c3-llvm-ccache"
+          )
+     fi
+
      if [[ $dry != 1 ]]; then
           rm -rf "${cwd:?}/llvm_install"/*
           mkdir -p "${prefix}"
@@ -89,6 +103,7 @@ make_llvm() {
           echo mkdir -p "${builddir}"
           echo pushd "${builddir}"
           echo ${cmake_bin} -G Ninja "${cmake_args[@]}" "${srcdir}"
+          echo popd
      fi
 
      echo "done configuring LLVM build"

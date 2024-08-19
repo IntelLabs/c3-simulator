@@ -1,59 +1,86 @@
+# Copyright 2016-2024 Intel Corporation
+# SPDX-License-Identifier: MIT
+
 decl {
 	! Update the custom glibc and/or LLVM libs on the guest, either by Uploading
 	! pre-built installation directories or by uploading the source and building
 	! within the Simics guest.
 
-	param checkpoint : string = ""
-	param save_checkpoint : string = ""
+	param checkpoint : string or nil
+	! Source checkpoint to use as base for new checkpoint. If unset, script
+	! will bootstrap from targets/qsp-x86/qsp-clear-linux.simics.
+	param save_checkpoint : string
+	! The path where the checkpoint should be saved.
 
-	param buildmode : string = "upload"
+	param buildmode : {"upload", "build"} or nil = NIL
 	! Set to 'upload' in order to just upload pre-built libraries from their
-	! respective directoreis, or to 'build', to upload sources instead and do
-	! the build too within the guest.
+	! respective directories, or to 'build', to upload sources instead and do
+	! the build too within the guest. This overrides individual buildmode flags
+	! for LLVM or glibc.
 
 	param do_llvm : bool = TRUE
-	! Shoudl be upload/build LLVM?
+	! Should we update LLVM?
 
 	param do_glibc : bool = TRUE
-	! Shoudl be upload/build glibc?
+	! Should we update glibc?
 
-	param llvm_buildmode : string = "upload"
+	param llvm_buildmode : {"upload", "build"} = "upload"
+	! Control LLVM buildmode, if set to "build", then glibc will be built
+	! within the simulation, otherwise, the pre-built installation directory
+	! will be uploaded.
+
 	param llvm_src : string = "llvm/src"
+	! Path to LLVM source, used when building LLVM on simulation.
 	param llvm_install : string = "llvm/llvm_install"
+	! Path to LLVM install, used when uploading prebuilt LLVM to simulation.
 	param llvm_dest_dir : string = "/home/simics/llvm"
+	! Path within simulation for installing LLVM.
 	param llvm_build_script : string = "make_llvm.sh"
+	! The LLVM build script to use.
 
-	param glibc_buildmode : string = "upload"
+	param glibc_buildmode : {"upload", "build" } = "upload"
+	! Control glibc buildmode, if set to "build", then glibc will be built
+	! within the simulation, otherwise, the pre-built installation directory
+	! will be uploaded.
+
 	param glibc_src : string = "glibc/src"
+	! Path to Glibc source, used when building LLVM on simulation.
 	param glibc_install : string = "glibc/glibc-2.30_install"
+	! Path to Glibc install, used when uploading prebuilt LLVM to simulation.
 	param glibc_dest_dir : string = "/home/simics/glibc"
+	! Path within simulation for installing Glibc.
 	param glibc_build_script : string = "make_glibc.sh"
+	! The Glibc build script to use.
 
 	param malloc_src : string = "malloc"
-	! Where to find C3 malloc sources, needed for glibc build.
+	! Where to find C3 malloc sources, needed for building in simulation.
 
 	param build_env : string = ""
 	! Additional environmental variables to be set when running the build
 	! scripts within the guest.
 
 	param exit : bool = FALSE
+	! Should this script explicitly exit on completion.
 	param system : string = board
+	! The system to use, you generally will not need to modify this.
 
 	param upload_unit_tests : bool = FALSE
+	! If set to TRUE, then the ./unit_tests folder will be uploaded to the
+	! simulation. Can be used in conjunction with the --noupload option when
+	! running pytest python_tests/test_unit.py.
 	param unit_tests_dir : string = "unit_tests"
+	! Path to unit_tests folder for uploading  when upload_unit_tests=TRUE
+
 }
 
-if $checkpoint != "" {
+if $checkpoint != NIL {
 	read-configuration $checkpoint
 } else {
 	$memory_megs=32768
 	run-command-file targets/qsp-x86/qsp-clear-linux.simics
 }
 
-if $buildmode != "build" and $buildmode != "upload" {
-	echo "UNRECOGNIZED buildmode: %s" % [$buildmode]
-	exit
-} else {
+if $buildmode != NIL {
 	if $buildmode == "build" {
 		$llvm_buildmode = "build"
 		$glibc_buildmode = "build"
@@ -99,7 +126,7 @@ script-branch "upload_and_build" {
 	echo "is_ubuntu: %s" % [$is_ubuntu]
 
 	$cpu.wait-for-time 1 -relative
-	@sychronizeGuestDate()
+	@synchronizeGuestDate()
 
 	################################################
 	#     Upload install or source files files     #
@@ -150,12 +177,13 @@ script-branch "upload_and_build" {
 		@command_to_console("ln -s /home/simics/unit_tests/include/unit_tests include/unit_tests")
 	}
 
+
 	#####################################
-	#     Setup, configure, or buid     #
+	#     Setup, configure, or build    #
 	#####################################
 
 	@command_to_console("unset CFLAGS")
-	@sychronizeGuestDate()
+	@synchronizeGuestDate()
 
 	if $is_ubuntu {
 		@command_to_console("sudo apt -y install gawk bison python3 gcc-8 g++-8 build-essential")
@@ -165,6 +193,7 @@ script-branch "upload_and_build" {
 	@command_to_console("cd ~")
 
 	@command_to_console("rm -rf malloc crypto")
+	@copy_include_folders("c3lib/c3")
 	@copy_include_folders("malloc")
 	@copy_include_folders("crypto")
 	@command_to_console("ln -s include/malloc")
@@ -204,23 +233,16 @@ script-branch "upload_and_build" {
 	$matic.delete-handle
 
 	# Once completed, save checkpoint
-	if save_checkpoint != "" {
-		@cmd_to_shell("rm -rf " + simenv.save_checkpoint)
-		# Make sure we have the parent directory with -p
-		@cmd_to_shell("mkdir -p " + simenv.save_checkpoint)
-		# But delete the checkpoint directory (but not full path, i.e., no -p)
-		@cmd_to_shell("rmdir " + simenv.save_checkpoint)
-		echo "Saving checkpoint to " + $save_checkpoint + " ... This may take a while..."
-		sim->hide_console_windows = FALSE
-		$con.show
-		write-configuration $save_checkpoint
-		echo "done"
-	} else {
-		echo ""
-		echo "No save_checkpoint defined."
-		echo ""
-		echo "You can save a checkpoint with 'write-configuration <checkpoint_name>.ckpt'"
-	}
+	@cmd_to_shell("rm -rf " + simenv.save_checkpoint)
+	# Make sure we have the parent directory with -p
+	@cmd_to_shell("mkdir -p " + simenv.save_checkpoint)
+	# But delete the checkpoint directory (but not full path, i.e., no -p)
+	@cmd_to_shell("rmdir " + simenv.save_checkpoint)
+	echo "Saving checkpoint to " + $save_checkpoint + " ... This may take a while..."
+	sim->hide_console_windows = FALSE
+	$con.show
+	write-configuration $save_checkpoint
+	echo "done"
 
 	if $exit {
 		exit

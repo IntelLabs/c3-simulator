@@ -1,3 +1,6 @@
+// Copyright 2024 Intel Corporation
+// SPDX-License-Identifier: MIT
+
 #ifndef UNIT_TESTS_INCLUDE_UNIT_TESTS_COMMON_H_
 #define UNIT_TESTS_INCLUDE_UNIT_TESTS_COMMON_H_
 

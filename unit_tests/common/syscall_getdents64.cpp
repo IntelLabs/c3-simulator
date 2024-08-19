@@ -1,3 +1,6 @@
+// Copyright 2024 Intel Corporation
+// SPDX-License-Identifier: MIT
+
 // model: *
 // need_kernel: yes
 #include <dirent.h>
@@ -77,7 +80,7 @@ class PathTest : public ::testing::Test {
     }
 };
 
-// Check opendir works as expecte
+// Check opendir works as expected
 
 TEST_F(PathTest, opendir_heap) { test_opendir(h_path1); }
 

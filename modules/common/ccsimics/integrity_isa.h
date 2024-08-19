@@ -1,7 +1,6 @@
-/*
- Copyright 2016 Intel Corporation
- SPDX-License-Identifier: MIT
-*/
+// Copyright 2016-2024 Intel Corporation
+// SPDX-License-Identifier: MIT
+
 #ifndef MODULES_COMMON_CCSIMICS_INTEGRITY_ISA_H_
 #define MODULES_COMMON_CCSIMICS_INTEGRITY_ISA_H_
 
@@ -11,7 +10,7 @@ extern "C" {
 }
 #include "ccsimics/data_encryption.h"
 #include "ccsimics/xed_util.h"
-#include "malloc/cc_globals.h"
+#include "c3/malloc/cc_globals.h"
 
 #define LOCK_OFFSET 1
 
@@ -265,13 +264,12 @@ template <typename ConTy, typename PETy> class IntegrityIsa {
         auto *integrity = m_pe_->get_integrity();
 
         if (integrity != nullptr && is_enabled()) {
-            ifdbgprint(
-                is_debug(),
-                "PreInitICV at 0x%016lx operands %d, %d:\n"
-                "       dest ptr  <- 0x%016lx\n"
-                "        src ptr  <- 0x%016lx\n",
-                m_con_->read_rip(), dest_ptr_reg, src_ptr_reg, dest_ptr, src_ptr
-            );
+            ifdbgprint(is_debug(),
+                       "PreInitICV at 0x%016lx operands %d, %d:\n"
+                       "       dest ptr  <- 0x%016lx\n"
+                       "        src ptr  <- 0x%016lx\n",
+                       m_con_->read_rip(), dest_ptr_reg, src_ptr_reg, dest_ptr,
+                       src_ptr);
 
             integrity->preInitICV(dest_ptr);
         }

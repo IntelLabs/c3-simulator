@@ -1,7 +1,5 @@
-/*
- Copyright Intel Corporation
- SPDX-License-Identifier: MIT
-*/
+// Copyright 2023-2024 Intel Corporation
+// SPDX-License-Identifier: MIT
 
 #ifndef MODULES_COMMON_CCSIMICS_REP_MOVSB_TRIPWIRE_H_
 #define MODULES_COMMON_CCSIMICS_REP_MOVSB_TRIPWIRE_H_
@@ -189,7 +187,7 @@ inline void RepMovsTripwire<CcTy, ConTy, CtxTy>::instruction_after_cb(
 
         integrity->copyICVs(rdi, rsi, n, df_flag);
         fixup_dst_icvs_ = false;
-        cc_->set_integrity_supress_mode(INTEGRITY_SUPPRESS_MODE::NONE);
+        cc_->set_integrity_suppress_mode(INTEGRITY_SUPPRESS_MODE::NONE);
     }
 }
 
@@ -262,7 +260,7 @@ RepMovsTripwire<CcTy, ConTy, CtxTy>::emul_prefix_rep_movs(
         // Store the register values so we can fixup the ICV map
         // based on these values
         fixup_dst_icvs_vals_ = std::make_tuple(rdi, rsi, rcx, df_flag);
-        cc_->set_integrity_supress_mode(mode);
+        cc_->set_integrity_suppress_mode(mode);
     }
     return CPU_Emulation_Default_Semantics;
 }

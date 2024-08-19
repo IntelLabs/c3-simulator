@@ -1,0 +1,900 @@
+diff -wru CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_01.c CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_01.c
+--- CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_01.c	2024-05-30 15:09:20.380350899 -0700
++++ CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_01.c	2024-05-30 15:11:23.051319061 -0700
+@@ -20,6 +20,16 @@
+ #define CHAR_ARRAY_SIZE (3 * sizeof(data) + 2)
+
+ #ifndef OMITBAD
++static inline uint64_t cc_isa_decptr(uint64_t pointer) {
++    asm(".byte 0xf0         \n"
++        ".byte 0x48         \n"
++        ".byte 0x01         \n"
++        ".byte 0xc0         \n"
++        : [ptr] "+a"(pointer)
++        :
++        :);
++    return pointer;
++}
+
+ void CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_01_bad()
+ {
+@@ -43,10 +53,13 @@
+         int i;
+         int * buffer = (int *)malloc(10 * sizeof(int));
+         if (buffer == NULL) {exit(-1);}
++        volatile int j;
++        j=0;
++        *((int*)cc_isa_decptr((uint64_t)(&j))) = 5;
+         /* initialize buffer */
+-        for (i = 0; i < 10; i++)
++        for (i = 0; i < 10; i++, j++)
+         {
+-            buffer[i] = 0;
++            buffer[j] = 0;
+         }
+         /* POTENTIAL FLAW: Attempt to write to an index of the array that is above the upper bound
+          * This code does check to see if the array index is negative */
+diff -wru CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_02.c CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_02.c
+--- CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_02.c	2024-05-30 15:09:20.384350735 -0700
++++ CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_02.c	2024-05-30 15:11:23.055318897 -0700
+@@ -20,6 +20,16 @@
+ #define CHAR_ARRAY_SIZE (3 * sizeof(data) + 2)
+
+ #ifndef OMITBAD
++static inline uint64_t cc_isa_decptr(uint64_t pointer) {
++    asm(".byte 0xf0         \n"
++        ".byte 0x48         \n"
++        ".byte 0x01         \n"
++        ".byte 0xc0         \n"
++        : [ptr] "+a"(pointer)
++        :
++        :);
++    return pointer;
++}
+
+ void CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_02_bad()
+ {
+@@ -48,10 +58,13 @@
+             int i;
+             int * buffer = (int *)malloc(10 * sizeof(int));
+             if (buffer == NULL) {exit(-1);}
++            volatile int j;
++            j=0;
++            *((int*)cc_isa_decptr((uint64_t)(&j))) = 5;
+             /* initialize buffer */
+-            for (i = 0; i < 10; i++)
++            for (i = 0; i < 10; i++, j++)
+             {
+-                buffer[i] = 0;
++                buffer[j] = 0;
+             }
+             /* POTENTIAL FLAW: Attempt to write to an index of the array that is above the upper bound
+              * This code does check to see if the array index is negative */
+diff -wru CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_03.c CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_03.c
+--- CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_03.c	2024-05-30 15:09:20.392350407 -0700
++++ CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_03.c	2024-05-30 15:11:23.059318733 -0700
+@@ -20,6 +20,16 @@
+ #define CHAR_ARRAY_SIZE (3 * sizeof(data) + 2)
+
+ #ifndef OMITBAD
++static inline uint64_t cc_isa_decptr(uint64_t pointer) {
++    asm(".byte 0xf0         \n"
++        ".byte 0x48         \n"
++        ".byte 0x01         \n"
++        ".byte 0xc0         \n"
++        : [ptr] "+a"(pointer)
++        :
++        :);
++    return pointer;
++}
+
+ void CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_03_bad()
+ {
+@@ -48,10 +58,13 @@
+             int i;
+             int * buffer = (int *)malloc(10 * sizeof(int));
+             if (buffer == NULL) {exit(-1);}
++            volatile int j;
++            j=0;
++            *((int*)cc_isa_decptr((uint64_t)(&j))) = 5;
+             /* initialize buffer */
+-            for (i = 0; i < 10; i++)
++            for (i = 0; i < 10; i++, j++)
+             {
+-                buffer[i] = 0;
++                buffer[j] = 0;
+             }
+             /* POTENTIAL FLAW: Attempt to write to an index of the array that is above the upper bound
+              * This code does check to see if the array index is negative */
+diff -wru CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_04.c CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_04.c
+--- CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_04.c	2024-05-30 15:09:20.396350243 -0700
++++ CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_04.c	2024-05-30 15:11:23.199312990 -0700
+@@ -26,6 +26,16 @@
+ static const int STATIC_CONST_FALSE = 0; /* false */
+
+ #ifndef OMITBAD
++static inline uint64_t cc_isa_decptr(uint64_t pointer) {
++    asm(".byte 0xf0         \n"
++        ".byte 0x48         \n"
++        ".byte 0x01         \n"
++        ".byte 0xc0         \n"
++        : [ptr] "+a"(pointer)
++        :
++        :);
++    return pointer;
++}
+
+ void CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_04_bad()
+ {
+@@ -54,10 +64,13 @@
+             int i;
+             int * buffer = (int *)malloc(10 * sizeof(int));
+             if (buffer == NULL) {exit(-1);}
++            volatile int j;
++            j=0;
++            *((int*)cc_isa_decptr((uint64_t)(&j))) = 5;
+             /* initialize buffer */
+-            for (i = 0; i < 10; i++)
++            for (i = 0; i < 10; i++, j++)
+             {
+-                buffer[i] = 0;
++                buffer[j] = 0;
+             }
+             /* POTENTIAL FLAW: Attempt to write to an index of the array that is above the upper bound
+              * This code does check to see if the array index is negative */
+diff -wru CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_05.c CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_05.c
+--- CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_05.c	2024-05-30 15:09:20.404349915 -0700
++++ CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_05.c	2024-05-30 15:11:23.103316928 -0700
+@@ -26,6 +26,16 @@
+ static int staticFalse = 0; /* false */
+
+ #ifndef OMITBAD
++static inline uint64_t cc_isa_decptr(uint64_t pointer) {
++    asm(".byte 0xf0         \n"
++        ".byte 0x48         \n"
++        ".byte 0x01         \n"
++        ".byte 0xc0         \n"
++        : [ptr] "+a"(pointer)
++        :
++        :);
++    return pointer;
++}
+
+ void CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_05_bad()
+ {
+@@ -54,10 +64,13 @@
+             int i;
+             int * buffer = (int *)malloc(10 * sizeof(int));
+             if (buffer == NULL) {exit(-1);}
++            volatile int j;
++            j=0;
++            *((int*)cc_isa_decptr((uint64_t)(&j))) = 5;
+             /* initialize buffer */
+-            for (i = 0; i < 10; i++)
++            for (i = 0; i < 10; i++, j++)
+             {
+-                buffer[i] = 0;
++                buffer[j] = 0;
+             }
+             /* POTENTIAL FLAW: Attempt to write to an index of the array that is above the upper bound
+              * This code does check to see if the array index is negative */
+diff -wru CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_06.c CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_06.c
+--- CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_06.c	2024-05-30 15:09:20.408349751 -0700
++++ CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_06.c	2024-05-30 15:11:23.207312662 -0700
+@@ -25,6 +25,16 @@
+ static const int STATIC_CONST_FIVE = 5;
+
+ #ifndef OMITBAD
++static inline uint64_t cc_isa_decptr(uint64_t pointer) {
++    asm(".byte 0xf0         \n"
++        ".byte 0x48         \n"
++        ".byte 0x01         \n"
++        ".byte 0xc0         \n"
++        : [ptr] "+a"(pointer)
++        :
++        :);
++    return pointer;
++}
+
+ void CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_06_bad()
+ {
+@@ -53,10 +63,13 @@
+             int i;
+             int * buffer = (int *)malloc(10 * sizeof(int));
+             if (buffer == NULL) {exit(-1);}
++            volatile int j;
++            j=0;
++            *((int*)cc_isa_decptr((uint64_t)(&j))) = 5;
+             /* initialize buffer */
+-            for (i = 0; i < 10; i++)
++            for (i = 0; i < 10; i++, j++)
+             {
+-                buffer[i] = 0;
++                buffer[j] = 0;
+             }
+             /* POTENTIAL FLAW: Attempt to write to an index of the array that is above the upper bound
+              * This code does check to see if the array index is negative */
+diff -wru CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_07.c CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_07.c
+--- CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_07.c	2024-05-30 15:09:20.416349422 -0700
++++ CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_07.c	2024-05-30 15:11:23.187313482 -0700
+@@ -25,6 +25,16 @@
+ static int staticFive = 5;
+
+ #ifndef OMITBAD
++static inline uint64_t cc_isa_decptr(uint64_t pointer) {
++    asm(".byte 0xf0         \n"
++        ".byte 0x48         \n"
++        ".byte 0x01         \n"
++        ".byte 0xc0         \n"
++        : [ptr] "+a"(pointer)
++        :
++        :);
++    return pointer;
++}
+
+ void CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_07_bad()
+ {
+@@ -53,10 +63,13 @@
+             int i;
+             int * buffer = (int *)malloc(10 * sizeof(int));
+             if (buffer == NULL) {exit(-1);}
++            volatile int j;
++            j=0;
++            *((int*)cc_isa_decptr((uint64_t)(&j))) = 5;
+             /* initialize buffer */
+-            for (i = 0; i < 10; i++)
++            for (i = 0; i < 10; i++, j++)
+             {
+-                buffer[i] = 0;
++                buffer[j] = 0;
+             }
+             /* POTENTIAL FLAW: Attempt to write to an index of the array that is above the upper bound
+              * This code does check to see if the array index is negative */
+diff -wru CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_08.c CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_08.c
+--- CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_08.c	2024-05-30 15:09:20.420349258 -0700
++++ CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_08.c	2024-05-30 15:11:23.211312498 -0700
+@@ -33,6 +33,16 @@
+ }
+
+ #ifndef OMITBAD
++static inline uint64_t cc_isa_decptr(uint64_t pointer) {
++    asm(".byte 0xf0         \n"
++        ".byte 0x48         \n"
++        ".byte 0x01         \n"
++        ".byte 0xc0         \n"
++        : [ptr] "+a"(pointer)
++        :
++        :);
++    return pointer;
++}
+
+ void CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_08_bad()
+ {
+@@ -61,10 +71,13 @@
+             int i;
+             int * buffer = (int *)malloc(10 * sizeof(int));
+             if (buffer == NULL) {exit(-1);}
++            volatile int j;
++            j=0;
++            *((int*)cc_isa_decptr((uint64_t)(&j))) = 5;
+             /* initialize buffer */
+-            for (i = 0; i < 10; i++)
++            for (i = 0; i < 10; i++, j++)
+             {
+-                buffer[i] = 0;
++                buffer[j] = 0;
+             }
+             /* POTENTIAL FLAW: Attempt to write to an index of the array that is above the upper bound
+              * This code does check to see if the array index is negative */
+diff -wru CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_09.c CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_09.c
+--- CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_09.c	2024-05-30 15:09:20.428348930 -0700
++++ CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_09.c	2024-05-30 15:11:23.107316764 -0700
+@@ -20,6 +20,16 @@
+ #define CHAR_ARRAY_SIZE (3 * sizeof(data) + 2)
+
+ #ifndef OMITBAD
++static inline uint64_t cc_isa_decptr(uint64_t pointer) {
++    asm(".byte 0xf0         \n"
++        ".byte 0x48         \n"
++        ".byte 0x01         \n"
++        ".byte 0xc0         \n"
++        : [ptr] "+a"(pointer)
++        :
++        :);
++    return pointer;
++}
+
+ void CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_09_bad()
+ {
+@@ -48,10 +58,13 @@
+             int i;
+             int * buffer = (int *)malloc(10 * sizeof(int));
+             if (buffer == NULL) {exit(-1);}
++            volatile int j;
++            j=0;
++            *((int*)cc_isa_decptr((uint64_t)(&j))) = 5;
+             /* initialize buffer */
+-            for (i = 0; i < 10; i++)
++            for (i = 0; i < 10; i++, j++)
+             {
+-                buffer[i] = 0;
++                buffer[j] = 0;
+             }
+             /* POTENTIAL FLAW: Attempt to write to an index of the array that is above the upper bound
+              * This code does check to see if the array index is negative */
+diff -wru CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_10.c CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_10.c
+--- CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_10.c	2024-05-30 15:09:20.432348766 -0700
++++ CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_10.c	2024-05-30 15:11:23.115316436 -0700
+@@ -20,6 +20,16 @@
+ #define CHAR_ARRAY_SIZE (3 * sizeof(data) + 2)
+
+ #ifndef OMITBAD
++static inline uint64_t cc_isa_decptr(uint64_t pointer) {
++    asm(".byte 0xf0         \n"
++        ".byte 0x48         \n"
++        ".byte 0x01         \n"
++        ".byte 0xc0         \n"
++        : [ptr] "+a"(pointer)
++        :
++        :);
++    return pointer;
++}
+
+ void CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_10_bad()
+ {
+@@ -48,10 +58,13 @@
+             int i;
+             int * buffer = (int *)malloc(10 * sizeof(int));
+             if (buffer == NULL) {exit(-1);}
++            volatile int j;
++            j=0;
++            *((int*)cc_isa_decptr((uint64_t)(&j))) = 5;
+             /* initialize buffer */
+-            for (i = 0; i < 10; i++)
++            for (i = 0; i < 10; i++, j++)
+             {
+-                buffer[i] = 0;
++                buffer[j] = 0;
+             }
+             /* POTENTIAL FLAW: Attempt to write to an index of the array that is above the upper bound
+              * This code does check to see if the array index is negative */
+diff -wru CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_11.c CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_11.c
+--- CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_11.c	2024-05-30 15:09:20.436348602 -0700
++++ CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_11.c	2024-05-30 15:11:23.119316272 -0700
+@@ -20,6 +20,16 @@
+ #define CHAR_ARRAY_SIZE (3 * sizeof(data) + 2)
+
+ #ifndef OMITBAD
++static inline uint64_t cc_isa_decptr(uint64_t pointer) {
++    asm(".byte 0xf0         \n"
++        ".byte 0x48         \n"
++        ".byte 0x01         \n"
++        ".byte 0xc0         \n"
++        : [ptr] "+a"(pointer)
++        :
++        :);
++    return pointer;
++}
+
+ void CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_11_bad()
+ {
+@@ -48,10 +58,13 @@
+             int i;
+             int * buffer = (int *)malloc(10 * sizeof(int));
+             if (buffer == NULL) {exit(-1);}
++            volatile int j;
++            j=0;
++            *((int*)cc_isa_decptr((uint64_t)(&j))) = 5;
+             /* initialize buffer */
+-            for (i = 0; i < 10; i++)
++            for (i = 0; i < 10; i++, j++)
+             {
+-                buffer[i] = 0;
++                buffer[j] = 0;
+             }
+             /* POTENTIAL FLAW: Attempt to write to an index of the array that is above the upper bound
+              * This code does check to see if the array index is negative */
+diff -wru CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_13.c CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_13.c
+--- CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_13.c	2024-05-30 15:09:20.444348274 -0700
++++ CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_13.c	2024-05-30 15:11:23.159314631 -0700
+@@ -20,6 +20,16 @@
+ #define CHAR_ARRAY_SIZE (3 * sizeof(data) + 2)
+
+ #ifndef OMITBAD
++static inline uint64_t cc_isa_decptr(uint64_t pointer) {
++    asm(".byte 0xf0         \n"
++        ".byte 0x48         \n"
++        ".byte 0x01         \n"
++        ".byte 0xc0         \n"
++        : [ptr] "+a"(pointer)
++        :
++        :);
++    return pointer;
++}
+
+ void CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_13_bad()
+ {
+@@ -48,10 +58,13 @@
+             int i;
+             int * buffer = (int *)malloc(10 * sizeof(int));
+             if (buffer == NULL) {exit(-1);}
++            volatile int j;
++            j=0;
++            *((int*)cc_isa_decptr((uint64_t)(&j))) = 5;
+             /* initialize buffer */
+-            for (i = 0; i < 10; i++)
++            for (i = 0; i < 10; i++, j++)
+             {
+-                buffer[i] = 0;
++                buffer[j] = 0;
+             }
+             /* POTENTIAL FLAW: Attempt to write to an index of the array that is above the upper bound
+              * This code does check to see if the array index is negative */
+diff -wru CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_14.c CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_14.c
+--- CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_14.c	2024-05-30 15:09:20.448348110 -0700
++++ CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_14.c	2024-05-30 15:11:23.163314467 -0700
+@@ -20,6 +20,16 @@
+ #define CHAR_ARRAY_SIZE (3 * sizeof(data) + 2)
+
+ #ifndef OMITBAD
++static inline uint64_t cc_isa_decptr(uint64_t pointer) {
++    asm(".byte 0xf0         \n"
++        ".byte 0x48         \n"
++        ".byte 0x01         \n"
++        ".byte 0xc0         \n"
++        : [ptr] "+a"(pointer)
++        :
++        :);
++    return pointer;
++}
+
+ void CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_14_bad()
+ {
+@@ -48,10 +58,13 @@
+             int i;
+             int * buffer = (int *)malloc(10 * sizeof(int));
+             if (buffer == NULL) {exit(-1);}
++            volatile int j;
++            j=0;
++            *((int*)cc_isa_decptr((uint64_t)(&j))) = 5;
+             /* initialize buffer */
+-            for (i = 0; i < 10; i++)
++            for (i = 0; i < 10; i++, j++)
+             {
+-                buffer[i] = 0;
++                buffer[j] = 0;
+             }
+             /* POTENTIAL FLAW: Attempt to write to an index of the array that is above the upper bound
+              * This code does check to see if the array index is negative */
+diff -wru CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_15.c CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_15.c
+--- CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_15.c	2024-05-30 15:09:20.452347946 -0700
++++ CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_15.c	2024-05-30 15:11:23.123316107 -0700
+@@ -20,6 +20,16 @@
+ #define CHAR_ARRAY_SIZE (3 * sizeof(data) + 2)
+
+ #ifndef OMITBAD
++static inline uint64_t cc_isa_decptr(uint64_t pointer) {
++    asm(".byte 0xf0         \n"
++        ".byte 0x48         \n"
++        ".byte 0x01         \n"
++        ".byte 0xc0         \n"
++        : [ptr] "+a"(pointer)
++        :
++        :);
++    return pointer;
++}
+
+ void CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_15_bad()
+ {
+@@ -55,10 +65,13 @@
+         int i;
+         int * buffer = (int *)malloc(10 * sizeof(int));
+         if (buffer == NULL) {exit(-1);}
++        volatile int j;
++        j=0;
++        *((int*)cc_isa_decptr((uint64_t)(&j))) = 5;
+         /* initialize buffer */
+-        for (i = 0; i < 10; i++)
++        for (i = 0; i < 10; i++, j++)
+         {
+-            buffer[i] = 0;
++            buffer[j] = 0;
+         }
+         /* POTENTIAL FLAW: Attempt to write to an index of the array that is above the upper bound
+          * This code does check to see if the array index is negative */
+diff -wru CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_16.c CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_16.c
+--- CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_16.c	2024-05-30 15:09:20.460347618 -0700
++++ CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_16.c	2024-05-30 15:11:23.171314139 -0700
+@@ -20,6 +20,16 @@
+ #define CHAR_ARRAY_SIZE (3 * sizeof(data) + 2)
+
+ #ifndef OMITBAD
++static inline uint64_t cc_isa_decptr(uint64_t pointer) {
++    asm(".byte 0xf0         \n"
++        ".byte 0x48         \n"
++        ".byte 0x01         \n"
++        ".byte 0xc0         \n"
++        : [ptr] "+a"(pointer)
++        :
++        :);
++    return pointer;
++}
+
+ void CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_16_bad()
+ {
+@@ -49,10 +59,13 @@
+             int i;
+             int * buffer = (int *)malloc(10 * sizeof(int));
+             if (buffer == NULL) {exit(-1);}
++            volatile int j;
++            j=0;
++            *((int*)cc_isa_decptr((uint64_t)(&j))) = 5;
+             /* initialize buffer */
+-            for (i = 0; i < 10; i++)
++            for (i = 0; i < 10; i++, j++)
+             {
+-                buffer[i] = 0;
++                buffer[j] = 0;
+             }
+             /* POTENTIAL FLAW: Attempt to write to an index of the array that is above the upper bound
+              * This code does check to see if the array index is negative */
+diff -wru CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_17.c CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_17.c
+--- CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_17.c	2024-05-30 15:09:20.464347454 -0700
++++ CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_17.c	2024-05-30 15:11:23.223312006 -0700
+@@ -20,6 +20,16 @@
+ #define CHAR_ARRAY_SIZE (3 * sizeof(data) + 2)
+
+ #ifndef OMITBAD
++static inline uint64_t cc_isa_decptr(uint64_t pointer) {
++    asm(".byte 0xf0         \n"
++        ".byte 0x48         \n"
++        ".byte 0x01         \n"
++        ".byte 0xc0         \n"
++        : [ptr] "+a"(pointer)
++        :
++        :);
++    return pointer;
++}
+
+ void CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_17_bad()
+ {
+@@ -49,10 +59,13 @@
+             int i;
+             int * buffer = (int *)malloc(10 * sizeof(int));
+             if (buffer == NULL) {exit(-1);}
++            volatile int j;
++            j=0;
++            *((int*)cc_isa_decptr((uint64_t)(&j))) = 5;
+             /* initialize buffer */
+-            for (i = 0; i < 10; i++)
++            for (i = 0; i < 10; i++, j++)
+             {
+-                buffer[i] = 0;
++                buffer[j] = 0;
+             }
+             /* POTENTIAL FLAW: Attempt to write to an index of the array that is above the upper bound
+              * This code does check to see if the array index is negative */
+diff -wru CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_18.c CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_18.c
+--- CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_18.c	2024-05-30 15:09:20.472347126 -0700
++++ CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_18.c	2024-05-30 15:11:23.131315779 -0700
+@@ -20,6 +20,16 @@
+ #define CHAR_ARRAY_SIZE (3 * sizeof(data) + 2)
+
+ #ifndef OMITBAD
++static inline uint64_t cc_isa_decptr(uint64_t pointer) {
++    asm(".byte 0xf0         \n"
++        ".byte 0x48         \n"
++        ".byte 0x01         \n"
++        ".byte 0xc0         \n"
++        : [ptr] "+a"(pointer)
++        :
++        :);
++    return pointer;
++}
+
+ void CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_18_bad()
+ {
+@@ -47,10 +57,13 @@
+         int i;
+         int * buffer = (int *)malloc(10 * sizeof(int));
+         if (buffer == NULL) {exit(-1);}
++        volatile int j;
++        j=0;
++        *((int*)cc_isa_decptr((uint64_t)(&j))) = 5;
+         /* initialize buffer */
+-        for (i = 0; i < 10; i++)
++        for (i = 0; i < 10; i++, j++)
+         {
+-            buffer[i] = 0;
++            buffer[j] = 0;
+         }
+         /* POTENTIAL FLAW: Attempt to write to an index of the array that is above the upper bound
+          * This code does check to see if the array index is negative */
+diff -wru CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_21.c CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_21.c
+--- CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_21.c	2024-05-30 15:09:20.476346961 -0700
++++ CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_21.c	2024-05-30 15:11:23.175313974 -0700
+@@ -20,6 +20,16 @@
+ #define CHAR_ARRAY_SIZE (3 * sizeof(data) + 2)
+
+ #ifndef OMITBAD
++static inline uint64_t cc_isa_decptr(uint64_t pointer) {
++    asm(".byte 0xf0         \n"
++        ".byte 0x48         \n"
++        ".byte 0x01         \n"
++        ".byte 0xc0         \n"
++        : [ptr] "+a"(pointer)
++        :
++        :);
++    return pointer;
++}
+
+ /* The static variable below is used to drive control flow in the sink function */
+ static int badStatic = 0;
+@@ -32,10 +42,13 @@
+             int i;
+             int * buffer = (int *)malloc(10 * sizeof(int));
+             if (buffer == NULL) {exit(-1);}
++            volatile int j;
++            j=0;
++            *((int*)cc_isa_decptr((uint64_t)(&j))) = 5;
+             /* initialize buffer */
+-            for (i = 0; i < 10; i++)
++            for (i = 0; i < 10; i++, j++)
+             {
+-                buffer[i] = 0;
++                buffer[j] = 0;
+             }
+             /* POTENTIAL FLAW: Attempt to write to an index of the array that is above the upper bound
+              * This code does check to see if the array index is negative */
+diff -wru CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_31.c CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_31.c
+--- CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_31.c	2024-05-30 15:09:20.480346797 -0700
++++ CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_31.c	2024-05-30 15:11:23.135315615 -0700
+@@ -20,6 +20,16 @@
+ #define CHAR_ARRAY_SIZE (3 * sizeof(data) + 2)
+
+ #ifndef OMITBAD
++static inline uint64_t cc_isa_decptr(uint64_t pointer) {
++    asm(".byte 0xf0         \n"
++        ".byte 0x48         \n"
++        ".byte 0x01         \n"
++        ".byte 0xc0         \n"
++        : [ptr] "+a"(pointer)
++        :
++        :);
++    return pointer;
++}
+
+ void CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_31_bad()
+ {
+@@ -46,10 +56,13 @@
+             int i;
+             int * buffer = (int *)malloc(10 * sizeof(int));
+             if (buffer == NULL) {exit(-1);}
++            volatile int j;
++            j=0;
++            *((int*)cc_isa_decptr((uint64_t)(&j))) = 5;
+             /* initialize buffer */
+-            for (i = 0; i < 10; i++)
++            for (i = 0; i < 10; i++, j++)
+             {
+-                buffer[i] = 0;
++                buffer[j] = 0;
+             }
+             /* POTENTIAL FLAW: Attempt to write to an index of the array that is above the upper bound
+              * This code does check to see if the array index is negative */
+diff -wru CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_32.c CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_32.c
+--- CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_32.c	2024-05-30 15:09:20.484346633 -0700
++++ CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_32.c	2024-05-30 15:11:23.191313318 -0700
+@@ -20,6 +20,16 @@
+ #define CHAR_ARRAY_SIZE (3 * sizeof(data) + 2)
+
+ #ifndef OMITBAD
++static inline uint64_t cc_isa_decptr(uint64_t pointer) {
++    asm(".byte 0xf0         \n"
++        ".byte 0x48         \n"
++        ".byte 0x01         \n"
++        ".byte 0xc0         \n"
++        : [ptr] "+a"(pointer)
++        :
++        :);
++    return pointer;
++}
+
+ void CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_32_bad()
+ {
+@@ -51,10 +61,13 @@
+             int i;
+             int * buffer = (int *)malloc(10 * sizeof(int));
+             if (buffer == NULL) {exit(-1);}
++            volatile int j;
++            j=0;
++            *((int*)cc_isa_decptr((uint64_t)(&j))) = 5;
+             /* initialize buffer */
+-            for (i = 0; i < 10; i++)
++            for (i = 0; i < 10; i++, j++)
+             {
+-                buffer[i] = 0;
++                buffer[j] = 0;
+             }
+             /* POTENTIAL FLAW: Attempt to write to an index of the array that is above the upper bound
+              * This code does check to see if the array index is negative */
+diff -wru CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_33.cpp CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_33.cpp
+--- CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_33.cpp	2024-05-30 15:09:20.492346305 -0700
++++ CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_33.cpp	2024-05-30 15:11:23.151314959 -0700
+@@ -23,6 +23,16 @@
+ {
+
+ #ifndef OMITBAD
++static inline uint64_t cc_isa_decptr(uint64_t pointer) {
++    asm(".byte 0xf0         \n"
++        ".byte 0x48         \n"
++        ".byte 0x01         \n"
++        ".byte 0xc0         \n"
++        : [ptr] "+a"(pointer)
++        :
++        :);
++    return pointer;
++}
+
+ void bad()
+ {
+@@ -49,10 +59,13 @@
+             int i;
+             int * buffer = (int *)malloc(10 * sizeof(int));
+             if (buffer == NULL) {exit(-1);}
++            volatile int j;
++            j=0;
++            *((int*)cc_isa_decptr((uint64_t)(&j))) = 5;
+             /* initialize buffer */
+-            for (i = 0; i < 10; i++)
++            for (i = 0; i < 10; i++, j++)
+             {
+-                buffer[i] = 0;
++                buffer[j] = 0;
+             }
+             /* POTENTIAL FLAW: Attempt to write to an index of the array that is above the upper bound
+              * This code does check to see if the array index is negative */
+diff -wru CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_34.c CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_34.c
+--- CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_34.c	2024-05-30 15:09:20.496346141 -0700
++++ CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_34.c	2024-05-30 15:11:23.195313154 -0700
+@@ -26,6 +26,16 @@
+ } CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_34_unionType;
+
+ #ifndef OMITBAD
++static inline uint64_t cc_isa_decptr(uint64_t pointer) {
++    asm(".byte 0xf0         \n"
++        ".byte 0x48         \n"
++        ".byte 0x01         \n"
++        ".byte 0xc0         \n"
++        : [ptr] "+a"(pointer)
++        :
++        :);
++    return pointer;
++}
+
+ void CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_34_bad()
+ {
+@@ -53,10 +63,13 @@
+             int i;
+             int * buffer = (int *)malloc(10 * sizeof(int));
+             if (buffer == NULL) {exit(-1);}
++            volatile int j;
++            j=0;
++            *((int*)cc_isa_decptr((uint64_t)(&j))) = 5;
+             /* initialize buffer */
+-            for (i = 0; i < 10; i++)
++            for (i = 0; i < 10; i++, j++)
+             {
+-                buffer[i] = 0;
++                buffer[j] = 0;
+             }
+             /* POTENTIAL FLAW: Attempt to write to an index of the array that is above the upper bound
+              * This code does check to see if the array index is negative */
+diff -wru CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_41.c CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_41.c
+--- CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_41.c	2024-05-30 15:09:20.504345813 -0700
++++ CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_41.c	2024-05-30 15:11:23.139315451 -0700
+@@ -20,6 +20,16 @@
+ #define CHAR_ARRAY_SIZE (3 * sizeof(data) + 2)
+
+ #ifndef OMITBAD
++static inline uint64_t cc_isa_decptr(uint64_t pointer) {
++    asm(".byte 0xf0         \n"
++        ".byte 0x48         \n"
++        ".byte 0x01         \n"
++        ".byte 0xc0         \n"
++        : [ptr] "+a"(pointer)
++        :
++        :);
++    return pointer;
++}
+
+ static void badSink(int data)
+ {
+@@ -27,10 +37,13 @@
+         int i;
+         int * buffer = (int *)malloc(10 * sizeof(int));
+         if (buffer == NULL) {exit(-1);}
++        volatile int j;
++        j=0;
++        *((int*)cc_isa_decptr((uint64_t)(&j))) = 5;
+         /* initialize buffer */
+-        for (i = 0; i < 10; i++)
++        for (i = 0; i < 10; i++, j++)
+         {
+-            buffer[i] = 0;
++            buffer[j] = 0;
+         }
+         /* POTENTIAL FLAW: Attempt to write to an index of the array that is above the upper bound
+          * This code does check to see if the array index is negative */
+diff -wru CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_42.c CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_42.c
+--- CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_42.c	2024-05-30 15:09:20.508345649 -0700
++++ CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_42.c	2024-05-30 15:11:23.179313810 -0700
+@@ -20,6 +20,16 @@
+ #define CHAR_ARRAY_SIZE (3 * sizeof(data) + 2)
+
+ #ifndef OMITBAD
++static inline uint64_t cc_isa_decptr(uint64_t pointer) {
++    asm(".byte 0xf0         \n"
++        ".byte 0x48         \n"
++        ".byte 0x01         \n"
++        ".byte 0xc0         \n"
++        : [ptr] "+a"(pointer)
++        :
++        :);
++    return pointer;
++}
+
+ static int badSource(int data)
+ {
+@@ -49,10 +59,13 @@
+         int i;
+         int * buffer = (int *)malloc(10 * sizeof(int));
+         if (buffer == NULL) {exit(-1);}
++        volatile int j;
++        j=0;
++        *((int*)cc_isa_decptr((uint64_t)(&j))) = 5;
+         /* initialize buffer */
+-        for (i = 0; i < 10; i++)
++        for (i = 0; i < 10; i++, j++)
+         {
+-            buffer[i] = 0;
++            buffer[j] = 0;
+         }
+         /* POTENTIAL FLAW: Attempt to write to an index of the array that is above the upper bound
+          * This code does check to see if the array index is negative */
+diff -wru CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_43.cpp CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_43.cpp
+--- CWE122_Stack/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_43.cpp	2024-05-30 15:09:20.516345321 -0700
++++ CWE122_Stack_Modified/CWE122_Heap_Based_Buffer_Overflow__c_CWE129_fgets_43.cpp	2024-05-30 15:11:23.143315287 -0700
+@@ -23,6 +23,16 @@
+ {
+
+ #ifndef OMITBAD
++static inline uint64_t cc_isa_decptr(uint64_t pointer) {
++    asm(".byte 0xf0         \n"
++        ".byte 0x48         \n"
++        ".byte 0x01         \n"
++        ".byte 0xc0         \n"
++        : [ptr] "+a"(pointer)
++        :
++        :);
++    return pointer;
++}
+
+ static void badSource(int &data)
+ {
+@@ -51,10 +61,13 @@
+         int i;
+         int * buffer = (int *)malloc(10 * sizeof(int));
+         if (buffer == NULL) {exit(-1);}
++        volatile int j;
++        j=0;
++        *((int*)cc_isa_decptr((uint64_t)(&j))) = 5;
+         /* initialize buffer */
+-        for (i = 0; i < 10; i++)
++        for (i = 0; i < 10; i++, j++)
+         {
+-            buffer[i] = 0;
++            buffer[j] = 0;
+         }
+         /* POTENTIAL FLAW: Attempt to write to an index of the array that is above the upper bound
+          * This code does check to see if the array index is negative */

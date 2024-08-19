@@ -1,3 +1,6 @@
+// Copyright 2024 Intel Corporation
+// SPDX-License-Identifier: MIT
+
 // model: *
 #include <gtest/gtest.h>
 /*

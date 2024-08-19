@@ -1,8 +1,5 @@
-# This Software is part of Wind River Simics. The rights to copy, distribute,
-# modify, or otherwise make use of this Software may be licensed only
-# pursuant to the terms of an applicable license agreement.
-# 
-# Copyright 2016-2019 Intel Corporation
+# Copyright 2016-2024 Intel Corporation
+# SPDX-License-Identifier: MIT
 
 import simics
 import instrumentation
@@ -18,7 +15,7 @@ def pre_connect(obj, provider, *tool_args):
 
     (debug_on, break_on_decode_fault, disable_data_encryption, integrity) = tool_args
 
-    # Without any specified flags, we enable everything by default. 
+    # Without any specified flags, we enable everything by default.
     if not any(tool_args):
         debug_on = False
         break_on_decode_fault = False
@@ -32,12 +29,12 @@ def pre_connect(obj, provider, *tool_args):
     ]
 
     # Format a description based on the settings used.
-    desc = ""    
+    desc = ""
     desc += "Types:"
     desc += "D" if debug_on else ""
     desc += "I" if break_on_decode_fault else ""
-    desc += "E" if disable_data_encryption else ""    
-    desc += "I" if integrity else ""    
+    desc += "E" if disable_data_encryption else ""
+    desc += "I" if integrity else ""
     return (args, desc)
 
 connect_args = [
@@ -50,7 +47,7 @@ connect_args = [
 connect_doc = \
     """Each new connection to the tracer tool can be configured by
     supplying the following flags:
-    
+
     <tt>-debug-on</tt> : Enable debug messages.
     <br/><tt>-break-on-decode-fault</tt> : Halt simulation when a non-canonical address is decoded
     <br/><tt>-disable-data-encryption</tt> : Disable C3 data encryption.
@@ -65,7 +62,7 @@ connect_extra_args = (connect_args, pre_connect, connect_doc)
 instrumentation.make_tool_commands(
     "c3_model",
     object_prefix = "c3",
-    provider_requirements = "cpu_instrumentation_subscribe",    
+    provider_requirements = "cpu_instrumentation_subscribe",
     provider_names = ("processor", "processors"),
     connect_extra_args = connect_extra_args,
     new_cmd_doc = """TBD001.

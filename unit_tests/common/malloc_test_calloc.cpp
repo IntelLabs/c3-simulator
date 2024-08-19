@@ -1,9 +1,15 @@
+// Copyright 2024 Intel Corporation
+// SPDX-License-Identifier: MIT
+
 // model: *
 // skip: zts
 // xfail: -integrity
 #include <malloc.h>
 #include <xmmintrin.h>
 #include <gtest/gtest.h>
+
+#define DEBUG
+#include "unit_tests/common.h"
 // extern "C" {
 // #include "encoding.h"
 // }
@@ -20,12 +26,21 @@
 
 static inline auto min(int a, int b) { return (a < b) ? a : b; }
 
-TEST(Calloc, SingleAlloc) {
+TEST(Calloc, SingleAlloc64b) {
+    uint64_t exp_val = 0x0;
+    uint64_t *p = (uint64_t *)calloc(sizeof(uint64_t), 1);
+    dbgprint("Checking %p -> %lu", p, *p);
+    ASSERT_EQ(exp_val, *p);
+    free(p);
+}
+
+TEST(Calloc, SingleAlloc32b) {
     uint32_t exp_val = 0x0;
     uint32_t *p = (uint32_t *)calloc(sizeof(uint32_t), 1);
     ASSERT_EQ(exp_val, *p);
     free(p);
 }
+
 TEST(Calloc, AllocRanging1Bto128M) {
     int max_size = 1 < 20;
     int max_num = 128;

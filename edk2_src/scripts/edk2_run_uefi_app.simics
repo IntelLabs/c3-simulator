@@ -1,3 +1,6 @@
+# Copyright 2023-2024 Intel Corporation
+# SPDX-License-Identifier: MIT
+
 decl {
 ! Script that runs the Quick Start Platform (QSP) with a modern processor core.
 

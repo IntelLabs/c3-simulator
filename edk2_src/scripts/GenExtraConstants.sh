@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Copyright 2023-2024 Intel Corporation
+# SPDX-License-Identifier: MIT
 
 set -euo pipefail
 

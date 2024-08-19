@@ -1,6 +1,5 @@
-/*
- * Copyright (C) 2019 Intel Corporation. All rights reserved.
- */
+// Copyright 2019-2024 Intel Corporation
+// SPDX-License-Identifier: MIT
 
 /**
  * File: encodings.h

@@ -1,7 +1,6 @@
-/*
- Copyright 2024 Intel Corporation
- SPDX-License-Identifier: MIT
-*/
+// Copyright 2024 Intel Corporation
+// SPDX-License-Identifier: MIT
+
 #include "sw_encoder.h"    // NOLINT
 #include "ascon_cipher.h"  // NOLINT
 #include "bipbip.h"        // NOLINT

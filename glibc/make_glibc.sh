@@ -1,4 +1,7 @@
 #!/bin/bash
+# Copyright 2016-2024 Intel Corporation
+# SPDX-License-Identifier: MIT
+
 set -euo pipefail
 # set -x
 
@@ -28,8 +31,10 @@ readonly CC_NO_ICV_ENABLE=${CC_NO_ICV_ENABLE:="0"}
 readonly CC_CA_STACK_ENABLE=${CC_CA_STACK_ENABLE:="1"}
 readonly GLIBC_MULTIARCH=${GLIBC_MULTIARCH:="0"}
 readonly CC_NO_WRAP_ENABLE=${CC_NO_WRAP_ENABLE:="0"}
+readonly CC_NO_TRIPWIRES_ENABLE=${CC_NO_TRIPWIRES_ENABLE:="0"}
+readonly CC_DETECT_1B_OVF=${CC_DETECT_1B_OVF:="0"}
 
-# Set MAKEFLAGS to emtpy string if it isn't defined
+# Set MAKEFLAGS to empty string if it isn't defined
 MAKEFLAGS=${MAKEFLAGS:=""}
 
 [[ "$(echo "$MAKEFLAGS" | awk '{print $1}')" == *n* ]] && dry=1
@@ -43,6 +48,7 @@ CC_NO_ICV_ENABLE=$CC_NO_ICV_ENABLE
 CC_CA_STACK_ENABLE=$CC_CA_STACK_ENABLE
 GLIBC_MULTIARCH=$GLIBC_MULTIARCH
 CC_NO_WRAP_ENABLE=$CC_NO_WRAP_ENABLE
+CC_DETECT_1B_OVF=$CC_DETECT_1B_OVF
 EOF
 )
 readonly build_conf_string
@@ -83,6 +89,11 @@ fi
 CPPFLAGS=${CPPFLAGS:=""}
 CPPFLAGS="${CPPFLAGS} -I${cwd}/../malloc -DCC"
 CFLAGS=( -fcf-protection=none -g -O2 )
+
+c3lib_path="$(cd "${cwd}"/../c3lib; pwd)"
+CFLAGS+=( "-I${c3lib_path}" )
+CPPFLAGS="${CPPFLAGS} -I${c3lib_path}"
+
 if (( GCC_VERSION >= 10 )); then
     CFLAGS+=(
         -Wno-error=zero-length-bounds
@@ -133,10 +144,21 @@ if [[ ${CC_CA_STACK_ENABLE} == "1" ]]; then
     CFLAGS+=( -DCC_CA_STACK_ENABLE )
 fi
 
+if [[ ${CC_DETECT_1B_OVF} == "1" ]]; then
+    CPPFLAGS="${CPPFLAGS} -DCC_DETECT_1B_OVF"
+    CFLAGS="${CFLAGS} -DCC_DETECT_1B_OVF"
+fi
+
 if [[ ${CC_NO_WRAP_ENABLE} == "1" ]]; then
     CPPFLAGS="${CPPFLAGS} -DCC_NO_WRAP_ENABLE"
     CFLAGS="${CFLAGS} -DCC_NO_WRAP_ENABLE"
 fi
+
+if [[ ${CC_NO_TRIPWIRES_ENABLE} == "1" ]]; then
+    CPPFLAGS="${CPPFLAGS} -DCC_NO_TRIPWIRES_ENABLE"
+    CFLAGS="${CFLAGS} -DCC_NO_TRIPWIRES_ENABLE"
+fi
+
 
 configure_args=(
     prefix="${prefix}"

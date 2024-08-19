@@ -1,8 +1,14 @@
+# Copyright 2021-2024 Intel Corporation
+# SPDX-License-Identifier: MIT
+
 decl {
 	! Update the Linux kernel on a previously installed Ubuntu checkpoint.
 
 	param checkpoint : string
-	param save_checkpoint : string = ""
+	! Source checkpoint to use as base for new checkpoint. If unset, script
+	! will bootstrap from targets/qsp-x86/qsp-clear-linux.simics.
+	param save_checkpoint : string
+	! The path where the checkpoint should be saved.
 
 	param kernel_src : string = "linux/src"
 	! Location of tarball containing Linux source, expecting the tarball to
@@ -13,15 +19,15 @@ decl {
 	! within the tarball and extracted into the guest).
 
 	param t_home : string = "/home/simics"
-	! The folder where the soruces will be unpacked
+	! The folder where the sources will be unpacked
 
 	param linux_hostname : string = "board"
 	! Guest system hostname (used for automation)
 
 	param linux_user : string = "simics"
-	! Guest sytem default user
+	! Guest system default user
 	param linux_password : string = "simics"
-	! Guest sytem default user password
+	! Guest system default user password
 
 	param upload_glibc : bool = FALSE
 	! to update glibc, or not to update glibc?
@@ -30,14 +36,24 @@ decl {
 	! to update llvm, or not to update llvm?
 
 	param grub_default : string = "1>0"
+	! Option for configuring GRUB, only change if update script changes
 	param grub_temp_boot : string = "0>0"
+	! Option for configuring GRUB, only change if update script changes
 
 	param system : string = board
-	param exit : int = 0
+	! The system to use, you generally will not need to modify this.
+	param exit : bool = FALSE
+	! Should this script explicitly exit on completion.
 	param console_output : bool = FALSE
+	! Set to TRUE, to show serial console output
 
 	param upload_unit_tests : bool = FALSE
+	! If set to TRUE, then the ./unit_tests folder will be uploaded to the
+	! simulation. Can be used in conjunction with the --noupload option when
+	! running pytest python_tests/test_unit.py.
 	param unit_tests_dir : string = "unit_tests"
+	! Path to unit_tests folder for uploading  when upload_unit_tests=TRUE
+
 }
 
 run-python-file scripts/init.py
@@ -76,8 +92,11 @@ $branch_id = (script-branch "workload" {
 	disable-real-time-mode
 
 	@command_to_console("rm -rf malloc crypto")
+	@copy_include_folders("c3lib/c3")
 	@copy_include_folders("malloc")
 	@copy_include_folders("crypto")
+	@command_to_console("ln -s include/malloc")
+	@command_to_console("ln -s include/crypto")
 
 	if $upload_glibc {
 		@command_to_console("rm -rf glibc")
@@ -99,6 +118,7 @@ $branch_id = (script-branch "workload" {
 		@command_to_console("ln -s /home/simics/unit_tests/include/unit_tests include/unit_tests")
 	}
 
+
 	#using virtiofs
 	load-module virtio-comp
 	$shared_dir_comp = (new-virtio-pcie-fs-comp share = $kernel_src tag_name = shared_dir name = $system.virtiofs2)
@@ -109,7 +129,7 @@ $branch_id = (script-branch "workload" {
 	$matic.delete-handle
 	disable-real-time-mode
 	$con.input("sudo reboot\n")
-	echo "Wating for: .*%s.*login:" % [$linux_hostname]
+	echo "Waiting for: .*%s.*login:" % [$linux_hostname]
 	$con.bp-wait-for-console-string -regexp ".*%s.*login:" % [$linux_hostname]
 	enable-real-time-mode
 	$cpu.wait-for-time 1 -relative
@@ -123,7 +143,7 @@ $branch_id = (script-branch "workload" {
 
 	echo "Installing kernel modules and image"
 	if $use_real_time { enable-real-time-mode }
-	@sychronizeGuestDate()
+	@synchronizeGuestDate()
 	@command_to_console("mkdir -p {}".format(simenv.linux_dirname))
 	@command_to_console("sudo mount -t virtiofs shared_dir {}".format(simenv.linux_dirname))
 	@command_to_console("pushd {}".format(simenv.linux_dirname))
@@ -141,9 +161,9 @@ $branch_id = (script-branch "workload" {
 
 	echo "Rebooting..."
 	if $use_real_time { enable-real-time-mode }
-	@sychronizeGuestDate()
+	@synchronizeGuestDate()
 	$con.input("sudo reboot\n")
-	echo "Wating for: .*%s.*login:" % [$linux_hostname]
+	echo "Waiting for: .*%s.*login:" % [$linux_hostname]
 	$con.bp-wait-for-console-string -regexp ".*%s.*login:" % [$linux_hostname]
 	$cpu.wait-for-time 1 -relative
 	echo "Logging in user: %s" % [$linux_user]
@@ -161,9 +181,9 @@ $branch_id = (script-branch "workload" {
 
 	echo "Rebooting to custom kernel..."
 	if $use_real_time { enable-real-time-mode }
-	@sychronizeGuestDate()
+	@synchronizeGuestDate()
 	$con.input("sudo reboot\n")
-	echo "Wating for: .*%s.*login:" % [$linux_hostname]
+	echo "Waiting for: .*%s.*login:" % [$linux_hostname]
 	$con.bp-wait-for-console-string -regexp ".*%s.*login:" % [$linux_hostname]
 	echo "Logging in user: %s" % [$linux_user]
 	$con.input "%s\n" % [$linux_user]
@@ -193,7 +213,7 @@ $branch_id = (script-branch "workload" {
 		disable-real-time-mode
 	}
 
-	if $exit != 0 {
+	if $exit {
 		exit
 	}
 })

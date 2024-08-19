@@ -31,9 +31,17 @@ set_variables() {
 
     export simics_script="${SCRIPT_DIR}/edk2_run_linux.simics"
     export buildroot_dest="${EDK2_SRC}/edk2_buildroot"
-    export buildroot_config_file="${C3_ROOT}/scripts/buildroot_config/edk2_buildroot.config"
+
+    buildroot_config_file="${C3_ROOT}/scripts/buildroot_config/edk2_buildroot.config"
+    # If buildroot_toolchain exists, then we will use alternative config
+    readonly buildroot_toolchain="/opt/simics/buildroot_toolchains/x86_64-buildroot-linux-gnu_sdk-buildroot.tar.gz"
+    if [[ -e "${buildroot_toolchain}" ]]; then
+        buildroot_config_file="${C3_ROOT}/scripts/buildroot_config/edk2_buildroot_external_toolchain.config"
+    fi
+    export buildroot_config_file
+
     export buildroot_linux_config="${C3_ROOT}/linux/configs/linux_for_edk2_buildroot.config"
-    export logfile="${C3_ROOT}/logs/edk2.${l_time}.${l_conf}"
+    export logfile="${C3_ROOT}/logs/edk2_run_linux.${l_time}.${l_conf}"
     __run_or_dry mkdir -p "$(dirname "${logfile}")"
 
     export simics_build_args+=( CC_EDK2=1 )
@@ -48,12 +56,9 @@ link_latest_logs() {
     log_dirname="$(dirname "${logfile_path}")"
 
     pushd "${log_dirname}" > /dev/null
-    __run_or_dry rm -f edk2.latest.edk2.commandline.txt edk2.latest.edk2.serconsole.txt \
-                       edk2.latest.grub.commandline.txt edk2.latest.grub.serconsole.txt
-    __run_or_dry ln -s "${log_basename}.edk2.commandline.txt" edk2.latest.edk2.commandline.txt
-    __run_or_dry ln -s "${log_basename}.edk2.serconsole.txt" edk2.latest.edk2.serconsole.txt
-    __run_or_dry ln -s "${log_basename}.grub.commandline.txt" edk2.latest.grub.commandline.txt
-    __run_or_dry ln -s "${log_basename}.grub.serconsole.txt" edk2.latest.grub.serconsole.txt
+    __run_or_dry ln -f -s "${log_basename}.edk2.commandline.txt" edk2_run_linux.latest.edk2.commandline.txt
+    __run_or_dry ln -f -s "${log_basename}.commandline.txt" edk2_run_linux.latest.commandline.txt
+    __run_or_dry ln -f -s "${log_basename}.serconsole.txt" edk2_run_linux.latest.serconsole.txt
     popd
 }
 
@@ -66,7 +71,7 @@ main() {
     [[ ${rebuild_edk2:=0} == 0 ]] || do_rebuild_edk2
 
     if [[ $myfunc == "__do_run" ]]; then
-        # Link logsfiles for convenience
+        # Link logfile for convenience
         link_latest_logs "${logfile}"
     fi
 

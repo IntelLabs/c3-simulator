@@ -1,3 +1,5 @@
+# Copyright 2024 Intel Corporation
+# SPDX-License-Identifier: MIT
 
 ifdef C3_SANITIZE
 	MODULE_CFLAGS += -fsanitize=address

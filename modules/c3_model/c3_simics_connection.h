@@ -1,7 +1,6 @@
-/*
- Copyright 2016 Intel Corporation
- SPDX-License-Identifier: MIT
-*/
+// Copyright 2016-2024 Intel Corporation
+// SPDX-License-Identifier: MIT
+
 #ifndef MODULES_C3_MODEL_C3_SIMICS_CONNECTION_H_
 #define MODULES_C3_MODEL_C3_SIMICS_CONNECTION_H_
 
@@ -12,11 +11,11 @@
 #include "ccsimics/integrity_isa.h"
 #include "ccsimics/ptrencdec_isa.h"
 #include "ccsimics/simics_connection.h"
+#include "ccsimics/x86_context.h"
+#include "ccsimics/x86_simics_connection.h"
 #include "c3_model.h"  // NOLINT
 
-
 #define FOR_OPTIONS_INTERNAL(op)
-
 
 #define FOR_OPTIONS(op)                                                        \
     op(debug_on, "enable debug messages");                                     \
@@ -29,10 +28,9 @@
     FOR_OPTIONS_INTERNAL(op)
 
 class C3SimicsConnection;
-using C3Context = ContextFinal<C3SimicsConnection>;
+using C3Context = ContextFinal<C3SimicsConnection, X86Context>;
 
 #define CC_SIMICS_POINTER_ENCODING_TYPE CCPointerEncoding
-
 
 using C3PtrEnc = CC_SIMICS_POINTER_ENCODING_TYPE;
 using C3ModelTy = ccsimics::C3Model<C3SimicsConnection, C3Context, C3PtrEnc>;
@@ -44,7 +42,7 @@ class C3PtrencdecIsa final
         : ccsimics::PtrencdecIsa<C3SimicsConnection, C3ModelTy>(con, model) {}
 };
 
-class C3SimicsConnection final : public SimicsConnection {
+class C3SimicsConnection final : public X86SimicsConnection {
     using CtxTy = C3Context;
     using ConTy = C3SimicsConnection;
     using integrity_isa_t =
@@ -59,7 +57,7 @@ class C3SimicsConnection final : public SimicsConnection {
     std::unique_ptr<C3PtrencdecIsa> ptr_encdec_isa_;
     std::unique_ptr<integrity_isa_t> integrityisa_;
 
-    C3SimicsConnection(conf_object_t *con) : SimicsConnection(con) {}
+    C3SimicsConnection(conf_object_t *con) : X86SimicsConnection(con) {}
     virtual ~C3SimicsConnection() = default;
 
     ADD_DEFAULT_ACCESSORS(break_on_decode_fault)

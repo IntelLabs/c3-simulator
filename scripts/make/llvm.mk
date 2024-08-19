@@ -1,3 +1,5 @@
+# Copyright 2023-2024 Intel Corporation
+# SPDX-License-Identifier: MIT
 
 .PHONY: make_llvm
 make_llvm:
@@ -23,3 +25,6 @@ install_dependencies_ubuntu::
 	sudo apt install -y \
 		cmake \
 		ninja-build
+
+.PHONY: llvm
+llvm: c3_docker-make_llvm

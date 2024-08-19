@@ -60,7 +60,7 @@ do_common_options() {
 #   }
 #
 #   parse_extra_args() {
-#       # ... handle scrpt-sepcific arguments here ...
+#       # ... handle script-specific arguments here ...
 #   }
 #
 #   main "$@"
@@ -214,7 +214,7 @@ __buildroot_config_checksum() {
         "${buildroot_linux_config}"
     )
 
-    # Include the following varibles in the final checksum:
+    # Include the following variables in the final checksum:
     local buildroot_config_labels=(
         "${buildroot_git_rev}"
     )
@@ -327,7 +327,7 @@ __do_run() {
         magic="${magic:=0}"
         logfile="${logfile}"
         gdb_port="${gdb_port:=0}"
-        connect_real_network="${connect_real_network:=0}"
+        connect_real_network="${connect_real_network:=FALSE}"
         virtio_rootfs="$rootfs_image"
         kernel_cmdline="${kernel_cmdline[*]}"
     )

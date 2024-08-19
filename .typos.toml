@@ -1,0 +1,25 @@
+# Copyright 2024 Intel Corporation
+# SPDX-License-Identifier: MIT
+
+[files]
+extend-exclude = [
+    "scripts/buildroot_config/*",
+    "**/**/*.patch"
+]
+
+[default.extend-words]
+ihs = "ihs"
+[default]
+extend-ignore-identifiers-re = [
+    "-Iinclude",
+    "namd17",
+    "namd_ref",
+    "namd_test",
+]
+extend-ignore-re = [
+    "-Iinclude",
+    "\"namd\"",
+    "namd\\.input",
+    "namd\\.out",
+    "namd\\.out\\.ref"
+]

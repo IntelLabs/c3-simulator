@@ -1,0 +1,3 @@
+target create a.out --core core
+c3 pointer decode #rsp#
+quit

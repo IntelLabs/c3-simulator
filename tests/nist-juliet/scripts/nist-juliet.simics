@@ -1,0 +1,248 @@
+# Copyright 2024 Intel Corporation
+# SPDX-License-Identifier: MIT
+
+#Input:
+# workload_dir = w.r.t. simics directory: tests/nist-juliet/test-suite/testcases/CWE122...
+# workload_name = w.r.t workload_dir
+
+run-python-file scripts/init.py
+
+@def check_all_mandatory_vars(vars):
+	for v in vars.split():
+		if not v in simenv:
+			print("Error: variable " + v + " not defined. Exiting.")
+			run_command("exit")
+
+@def check_any_mandatory_vars(vars):
+	any_v = 0
+	for v in vars.split():
+		if not v in simenv:
+			print("Error: variable " + v + " not defined.")
+		else:
+			any_v = 1
+			break
+	if any_v == 0:
+		print("Error: none of the mandatory variables defined. Exiting.")
+		run_command("exit")
+
+
+@cmd_to_shell("hostname")
+if not defined save_checkpoint {
+   @check_all_mandatory_vars("workload_dir")
+}
+
+$host_juliet_path = "tests/nist-juliet"
+$host_juliet_script_path = $host_juliet_path +"/scripts"
+$target_home_path = "/home/simics"
+$target_juliet_path = $target_home_path +"/tests/nist-juliet"
+$target_juliet_script_path = $target_juliet_path + "/scripts"
+$target_glibc_path = $target_home_path + "/glibc/glibc-2.30_install/lib"
+$target_llvm_path = $target_home_path + "/llvm/llvm_install/lib"
+
+if not defined glibc_version { $glibc_version = "2.30" }
+if $glibc_version == "2.36" {
+	$libc = "libc.so.6"
+	$libpthread = "libpthread.so.0"
+	$glibc_ld = "ld-linux-x86-64.so.2"
+} else {
+	$libc = "libc-%s.so" % [$glibc_version]
+	$libpthread = "libpthread-%s.so" % [$glibc_version]
+	$glibc_ld = "ld-%s.so" % [$glibc_version]
+}
+if not defined guest_lib64_dir { $guest_lib64_dir = "/usr/lib64" }
+
+if not defined checkpoint { $checkpoint = "checkpoints/cc_kernel_1b_ovf.ckpt"}
+echo "Using checkpoint: " + $checkpoint
+if not defined system { $system = "board" }
+if not defined workload_name { $workload_name = ""}
+if not defined model { $model = "c3" }
+if not defined disable_cc_env { $disable_cc_env= 0 }
+if not defined build { $build = FALSE }
+if not defined compiler { $compiler = "g++"}
+if not defined gcc_flags { $gcc_flags = ""}
+if not defined ld_flags { $ld_flags = "" }
+if not defined enable_integrity { $enable_integrity = FALSE }
+if not defined enable_castack { $enable_castack = FALSE }
+if not defined env_vars { $env_vars = "" }
+if not defined unwinder { $unwinder="default_unwinder" }
+
+$cc_model_type = FALSE
+if $model == "cc" or $model == "c3" {
+	$cc_model_type = TRUE
+}
+
+if $cc_model_type {
+	if $disable_cc_env != 1 {
+		@append_env_var("CC_ENABLED=1") # environment return CA by default
+		if $enable_integrity == TRUE {
+			@append_env_var("CC_ICV_ENABLED=1")
+		}
+	} else {
+		@append_env_var("")             # initialize env_var
+	}
+	if $enable_castack {
+		@append_env_var("CASTACK_ENABLED=1")
+	}
+} else if $model == "native" {
+	if not defined env_vars { $env_vars = "" }
+	$target_glibc_path = "/usr/lib"
+} else {
+    echo "ERROR: need to specify valid model. Exiting"
+    exit 1
+}
+
+read-configuration $checkpoint
+$system.console.con.hide
+$con = $system.serconsole.con
+$cpu = $system.mb.cpu0.core[0][0]
+
+$start_time=0
+$start_cycle=0
+$end_time=0
+
+$branch_id = (script-branch "workload" {
+	$con.hide
+	$con.show
+	# Send in a newline to trigger a prompt
+	$con.input "cd\n"
+
+	# run for one/tenth second to give the hardware time to update
+	bp.time.wait-for $cpu 0.1
+    ###############################
+	#     Upload NIST Juliet files     #
+	###############################
+    echo "  Calling start-agent-manager"
+    start-agent-manager
+    echo "  Calling agent_manager.connect-to-agent"
+	agent_manager.connect-to-agent
+
+	@synchronizeGuestDate()
+
+    #if defined upload_glibc {
+	#	echo "  Copying libc-2.30.so libpthread-2.30.so libdl-2.30.so"
+	#	$host_glibc_path = "%simics%/glibc/glibc-2.30_install/lib"
+	#	matic0.upload (lookup-file $host_glibc_path + "/libc-2.30.so") $target_glibc_path + "/"
+	#	matic0.upload (lookup-file $host_glibc_path + "/libpthread-2.30.so") $target_glibc_path + "/"
+	#	matic0.upload (lookup-file $host_glibc_path + "/libdl-2.30.so") $target_glibc_path + "/"
+	#	matic0.wait-for-job
+	#}
+
+	if defined upload_glibc {
+		echo "  Copying %s %s %s" % [$libc, $libpthread, $glibc_ld]
+		$host_glibc_path = "%simics%/glibc/glibc-2.30_install/lib"
+		$dst = ("%s/" % [$target_glibc_path])
+		matic0.upload (lookup-file "%s/%s" % [$host_glibc_path, $libc]) $dst
+		matic0.upload (lookup-file "%s/%s" % [$host_glibc_path, $libpthread]) $dst
+		matic0.upload (lookup-file "%s/%s" % [$host_glibc_path, $glibc_ld]) $dst
+		matic0.wait-for-job
+	}
+
+	if defined upload_juliet {
+		echo "Transferring NIST Juliet testsuite to target... This will take a few seconds..."
+		@upload_tarball(simenv.host_juliet_path)
+		bp.time.wait-for $cpu 1
+		matic0.upload (lookup-file "%simics%/malloc/cc_globals.h") $target_juliet_script_path + "/"
+		matic0.wait-for-job
+	} else {
+		echo "Transferring NIST Juliet scripts to target..."
+		matic0.upload (lookup-file $host_juliet_script_path + "/run_juliet.sh") $target_juliet_script_path + "/"
+		matic0.upload (lookup-file $host_juliet_script_path + "/patch_makefile.sh") $target_juliet_script_path + "/"
+		matic0.upload (lookup-file $host_juliet_script_path + "/nist-juliet.simics") $target_juliet_script_path + "/"
+
+		matic0.upload (lookup-file $host_juliet_script_path + "/icv_reset.c") $target_juliet_script_path + "/"
+		matic0.upload (lookup-file "%simics%/malloc/cc_globals.h") $target_juliet_script_path + "/"
+
+		matic0.upload (lookup-file $host_juliet_script_path + "/nist-juliet-util.py") $target_juliet_script_path + "/"
+		matic0.upload (lookup-file $host_juliet_script_path + "/process_output.py") $target_juliet_script_path + "/"
+
+		matic0.wait-for-job
+	}
+	echo "Setting read-permissions on home directory"
+	@command_to_console("sudo chown -R simics:simics *")
+
+	if defined upload_juliet {
+	  echo "Done transferring NIST Juliet files to target"
+
+	  if defined save_checkpoint {
+		@cmd_to_shell("rm -rf " + simenv.checkpoint)
+		echo "Saving checkpoint ... This may take a while..."
+		stop
+		write-configuration -independent-checkpoint $checkpoint
+		echo "done"
+		exit 1
+	  }
+	}
+
+    @command_to_console("echo 0 | sudo tee /proc/sys/kernel/randomize_va_space")
+	disable-real-time-mode
+	#################################
+
+	###############################
+	#     Compile & Run           #
+	###############################
+	@command_to_console('export PATH=/home/simics/llvm/llvm_install/bin:$PATH')
+	@command_to_console("g++ " + simenv.target_juliet_script_path + "/icv_reset.c -o " + simenv.target_juliet_script_path + "/icv_reset")
+
+    if not defined build_cmd {
+		$build_cmd = "make clean -f Makefile-c3  && make individuals -f Makefile-c3"
+	}
+
+	$workload_dir = $target_home_path + "/" + $workload_dir
+	$workload_path = $workload_dir
+	if $workload_name != "" {
+		$workload_path = $workload_path + "/" + $workload_name
+	}
+
+	echo "Workload path: " + $workload_path
+	if $build {
+		echo "Compiling testcases ..."
+		@command_to_console("cd " + simenv.workload_dir)
+
+		####### TEMP ########
+#		@command_to_console("sudo ln -sf /home/simics/glibc/glibc-2.30_install/lib/libstdc++.so.6 /lib/x86_64-linux-gnu/libstdc++.so.6")
+		##########################
+
+		@command_to_console(simenv.build_cmd)
+		@command_to_console("cd")
+	}
+
+	$interpreter = ("%s/%s" % [$target_glibc_path, $glibc_ld])
+	if $unwinder == "default_unwinder" {
+		$rpath = $target_glibc_path
+	} else {
+		$rpath = ("%s:%s:%s/x86_64-unknown-linux-gnu" % [$target_glibc_path, $target_llvm_path, $target_llvm_path])
+	}
+
+    echo "Running model: " + $model
+	if $model == "native" {
+
+	} else if $cc_model_type {
+		if defined disable_encryption {
+			echo "Disabling data encryption"
+			$model_inst = (new-c3-model -connect-all -disable-data-encryption)
+		} else {
+			$model_inst = (new-c3-model -connect-all)
+		}
+		$model_inst += "_0"
+		if $enable_integrity {
+			$model_inst->integrity=TRUE
+			$model_inst->integrity_fault_on_read_mismatch=TRUE
+		}
+		if $enable_castack {
+			$model_inst->stack_hardening=TRUE
+		}
+	}
+
+	ptime
+	@command_to_console(simenv.target_juliet_script_path+"/nist-juliet-util.py " + simenv.target_glibc_path + " " + simenv.target_juliet_script_path + " " + simenv.unwinder + " " + simenv.interpreter + " " + simenv.rpath + " " + simenv.workload_path + " " + simenv.env_vars)
+	ptime
+
+	if defined write_output {
+	    if not defined result_file {$result_file = "cc_auto_results_" + (date) + ".csv"}
+	    matic0.download $target_home_path+"/cc_auto_results.csv" $result_file
+        matic0.wait-for-job
+	}
+    exit 1
+})
+enable-real-time-mode
+run

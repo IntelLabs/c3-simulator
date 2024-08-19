@@ -1,7 +1,5 @@
-/*
- Copyright Intel Corporation
- SPDX-License-Identifier: MIT
-*/
+// Copyright 2023-2024 Intel Corporation
+// SPDX-License-Identifier: MIT
 
 #ifndef MODULES_COMMON_CCSIMICS_INTEGRITY_H_
 #define MODULES_COMMON_CCSIMICS_INTEGRITY_H_
@@ -296,7 +294,7 @@ template <typename CcTy, typename ConTy, typename CtxTy> class Integrity final {
 
  public:
     /**
-     * @brief Register inegirty attirbutes to the Simics connection
+     * @brief Register inegirty attributes to the Simics connection
      */
     static inline void register_attributes(conf_class_t *cl);
 };
@@ -485,7 +483,7 @@ void Integrity<CcTy, ConTy, CtxTy>::preInitICV(uint64_t ptr) {
         // initialization status. Thus, do not touch granules that already have
         // PREINIT set.
         if ((stored_icv & ICV_PREINIT_MASK) == ICV_PREINIT_MASK)
-          return;
+            return;
 
         // Set the PREINIT bit.
         ifdbgprint(dbg(), "Setting PREINIT bit.");
@@ -735,8 +733,13 @@ inline bool Integrity<CcTy, ConTy, CtxTy>::check_icv(uint64_t icv_index,
     //
     // On memory reads, check that the INIT state is initialized.
     if (rw == RW::READ) {
-        if (IS_ICV_UNINITIALIZED(stored_icv))
+        if (IS_ICV_UNINITIALIZED(stored_icv)) {
             SIM_printf("Read from Uninitialized memory at %lx.\n", ca);
+            if (icv_break_on_read_mismatch() && !kIgnoreICVBreakOnReadLA)
+                SIM_break_simulation("CWE457");
+            if (icv_fault_on_read_mismatch())
+                this->con_->gp_fault(0, false, "CWE457");
+        }
     }
 
     return false;
@@ -777,7 +780,7 @@ Integrity<CcTy, ConTy, CtxTy>::_do_icv_correction(const ca_t ca,
         new_ptr = get_ca_t(stored_icv);
         new_ptr.plaintext_ = ca.plaintext_;
     }
-    SIM_printf("ICV_WARNING: Corretion modified 0x%016lx to 0x%016lx\n",
+    SIM_printf("ICV_WARNING: Correction modified 0x%016lx to 0x%016lx\n",
                ca.uint64_, new_ptr.uint64_);
     return new_ptr;
 }

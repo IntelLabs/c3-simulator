@@ -1,6 +1,9 @@
+// Copyright 2024 Intel Corporation
+// SPDX-License-Identifier: MIT
+
 // model: cc
 // nomodel: zts -zts -castack
-// simics_args: disable_cc_env=1 enable_integrity=1
+// simics_args: disable_cc_env=TRUE enable_integrity=TRUE
 
 // NOTE: Kernel support not yet extended to Integrity
 

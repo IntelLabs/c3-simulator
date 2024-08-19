@@ -1,4 +1,5 @@
-
+# Copyright 2024 Intel Corporation
+# SPDX-License-Identifier: MIT
 
 ifneq ("$(CC)","")
 ifeq (12, $(shell $(CC) --version | head -n1 | grep gcc | awk '{print $3}' | sed 's/\..*//'))
@@ -18,12 +19,19 @@ GCC12 = $(project_dir)/lib/gcc12/install/bin/gcc
 endif
 endif
 
-ifneq ("$(GCC12)","")
-	LINUX_MAKE_ARGS = CC="$(GCC12)"
+
+CCACHE := $(shell command -v ccache 2> /dev/null)
+LINUX_CCACHE_DIR := ${HOME}/.c3-linux-ccache
+ifneq ("$(CCACHE)","")
+LINUX_MAKE_ARGS = CC="ccache $(GCC12)" CCACHE_DIR=$(LINUX_CCACHE_DIR)
+else
+LINUX_MAKE_ARGS = CC="$(LINUX_CC)"
 endif
 
+LINUX_MAKE_ARGS += EXTRA_CFLAGS="-I$(project_dir)/c3lib"
+
 install_dependencies_ubuntu::
-	$(info === Depencencies for Linux builds)
+	$(info === Dependencies for Linux builds)
 	sudo apt install -y \
 		build-essential \
 		bison \
@@ -34,7 +42,7 @@ install_dependencies_ubuntu::
 		llvm \
 		zstd
 
-linux/src/.config: linux/default_config
+linux/src/.config: linux/configs/default_config
 	cp -f $< $@
 
 .PHONY: linux-config
@@ -57,8 +65,8 @@ else
 	# yes "" | $(MAKE) -C linux/src oldconfig $(LINUX_MAKE_ARGS)
 endif
 
-.PHONY: linux
-linux: linux-oldconfig
+.PHONY: make_linux
+make_linux: linux-oldconfig
 	$(info === Build Linux kernel)
 ifneq (n,$(findstring n,$(firstword -$(MAKEFLAGS))))
 	$(MAKE) -C linux/src $(LINUX_MAKE_ARGS)
@@ -66,10 +74,8 @@ else
 	# $(MAKE) -C linux/src $(LINUX_MAKE_ARGS)
 endif
 
-.PHONY: make_linux
-make_linux: linux
 
-linux/linux.tar.gz: linux
+linux/linux.tar.gz: make_linux
 	$(info === Package Linux kernel)
 	rm -f $@
 	cd $(dir $@) && tar czf $(notdir $@) src
@@ -84,3 +90,6 @@ endif
 
 .PHONY: mrproper
 mrproper:: linux-mrproper
+
+.PHONY: linux
+linux: c3_docker-make_linux

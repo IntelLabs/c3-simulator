@@ -1,3 +1,6 @@
+# Copyright 2021-2024 Intel Corporation
+# SPDX-License-Identifier: MIT
+
 decl {
     ! Script to automate Ubuntu installation from scratch, using the legacy
     ! netboot mini iso for Ubuntu 20.04. The iso file is expected to be in the
@@ -29,7 +32,7 @@ decl {
     ! Main user password.
 
     param bpimage_grub : string = "%simics%/scripts/breakpoint_images/ubuntu.mini.grub.brk"
-    ! Simics breakpoint image to detect the inital GRUB boot screen. If this
+    ! Simics breakpoint image to detect the initial GRUB boot screen. If this
     ! needs to be changed down the line, you can use the graphical Simics VGA
     ! window to capture a breakpoint image from the window menu.
 
@@ -50,7 +53,7 @@ $disk0_size=(1024*1024*1024)
 run-command-file "targets/qsp-x86/qsp-clear-linux.simics"
 
 if (shell("test -e %s && echo -n 1 || echo -n 0" % [$iso_image])) != "1" {
-    echo "Trying to download Ubuntu ISO iamge from %s" % [$iso_image_url]
+    echo "Trying to download Ubuntu ISO image from %s" % [$iso_image_url]
     shell("curl -o %s %s" % [$iso_image, $iso_image_url])
 }
 if (shell("sha256sum %s | awk  '{print $1;}'" % [$iso_image])) != $iso_image_sha {

@@ -1,7 +1,6 @@
-/*
- Copyright 2016 Intel Corporation
- SPDX-License-Identifier: MIT
-*/
+// Copyright 2016-2024 Intel Corporation
+// SPDX-License-Identifier: MIT
+
 #include <simics/simulator/conf-object.h>
 #include "ccsimics/simics_module.h"
 #include "c3_simics_connection.h"  // NOLINT

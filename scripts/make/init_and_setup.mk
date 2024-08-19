@@ -1,3 +1,5 @@
+# Copyright 2023-2024 Intel Corporation
+# SPDX-License-Identifier: MIT
 
 include $(project_dir)/scripts/make/xed.mk
 
@@ -42,7 +44,7 @@ remove-pre-push-hook:
 	rm .git/hooks/pre-push
 
 install_dependencies_ubuntu::
-	$(info === Depencencies for decompressing large files)
+	$(info === Dependencies for decompressing large files)
 	sudo apt install -y \
 		zstd
 

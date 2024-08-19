@@ -1,0 +1,6 @@
+target create a.out --core core
+reg read rsp
+print &end
+print original_str
+print str
+quit

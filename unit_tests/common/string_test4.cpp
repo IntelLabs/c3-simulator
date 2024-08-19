@@ -1,3 +1,6 @@
+// Copyright 2024 Intel Corporation
+// SPDX-License-Identifier: MIT
+
 // model: *
 #include <assert.h>
 #include <ctype.h>
@@ -201,10 +204,9 @@ TEST(STRING, mallocstrfry) {
                 char *returnval;
                 returnval = strfry(str_offset);
                 ASSERT_TRUE(
-                    (strcmp(str, returnval) != 0) ||
-                    // Re-randomize, in case we get same string by chance
-                    (strcmp(str, strfry(str_offset)) != 0)
-                );
+                        (strcmp(str, returnval) != 0) ||
+                        // Re-randomize, in case we get same string by chance
+                        (strcmp(str, strfry(str_offset)) != 0));
                 free(str);
             }
         }
@@ -227,11 +229,9 @@ TEST(STRING, mallocstrfryrandomsize) {
         strcpy(str, str_offset);
         char *returnval;
         returnval = strfry(str_offset);
-        ASSERT_TRUE(
-            (strcmp(str, returnval) != 0) ||
-            // Re-randomize, in case we get same string by chance
-            (strcmp(str, strfry(str_offset)) != 0)
-        );
+        ASSERT_TRUE((strcmp(str, returnval) != 0) ||
+                    // Re-randomize, in case we get same string by chance
+                    (strcmp(str, strfry(str_offset)) != 0));
         free(str);
         free(buff);
     }

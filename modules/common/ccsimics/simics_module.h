@@ -1,7 +1,6 @@
-/*
- Copyright 2016 Intel Corporation
- SPDX-License-Identifier: MIT
-*/
+// Copyright 2016-2024 Intel Corporation
+// SPDX-License-Identifier: MIT
+
 #ifndef MODULES_COMMON_CCSIMICS_SIMICS_MODULE_H_
 #define MODULES_COMMON_CCSIMICS_SIMICS_MODULE_H_
 
@@ -9,6 +8,7 @@
 #include <simics/simulator-iface/instrumentation-tool.h>
 #include <simics/simulator/conf-object.h>
 #include <simics/simulator/output.h>
+#include "ccsimics/simics_util.h"
 
 // Must be defined in .cpp file instantiating the SimicsModule template!
 extern conf_class_t *connection_class;
@@ -16,9 +16,9 @@ extern conf_class_t *connection_class;
 /**
  * @brief Abstract SimicsModule for registering module with Simics
  *
- * This should be overriden by the module, which should then define its own
+ * This should be overridden by the module, which should then define its own
  * Simics init_local that ivokes the SimicsModule init functions to register
- * the relvant types. When connecting the module to Simics, an object
+ * the relevant types. When connecting the module to Simics, an object
  * of ConnectionTy is then created for each of the connections.
  *
  * A concrete model should define the following static constants as they will
@@ -32,6 +32,9 @@ extern conf_class_t *connection_class;
  * @tparam ConnectionTy SimicsConnection type connecting to simulation
  */
 template <typename SimicsModuleTy, typename ConnectionTy> class SimicsModule {
+ public:
+    static const bool kDebugSimicsModule = false;
+
  private:
     conf_object_t *obj_;
     std::set<ConnectionTy *> connections_;
@@ -55,13 +58,16 @@ template <typename SimicsModuleTy, typename ConnectionTy> class SimicsModule {
     /**
      * @brief Connect model to CPU using ConnectionTy
      *
-     * Called automatically by registered Simics callbakcs.
+     * Called automatically by registered Simics callbacks.
      *
      * @param cpu
      * @param attr
      * @return conf_object*
      */
     inline conf_object *connect(conf_object_t *cpu, attr_value_t attr) {
+        ifdbgprint(kDebugSimicsModule, "Connecting %s to CPU %s", get_name(),
+                   SIM_object_name(cpu));
+
         // Create the Simics connection_class
         strbuf_t sb = SB_INIT;
         sb_addfmt(&sb, "%s_%d", get_name(), next_connection_number_);
@@ -70,7 +76,9 @@ template <typename SimicsModuleTy, typename ConnectionTy> class SimicsModule {
         sb_free(&sb);
 
         // Get the contained ConnectionTy object
+        ifdbgprint(kDebugSimicsModule, "Construction ConnectionTy object");
         auto *con = static_cast<ConnectionTy *>(SIM_object_data(con_obj));
+        ASSERT_MSG(con != nullptr, "ConnectionTy object is null!");
 
         // Store the connection here
         ASSERT_MSG(next_connection_number_ != UINT_MAX, "Integer overflow!");
@@ -78,13 +86,15 @@ template <typename SimicsModuleTy, typename ConnectionTy> class SimicsModule {
         connections_.insert(con);
 
         // Configure the connection
+        ifdbgprint(kDebugSimicsModule, "Calling con->module_configure");
         con->module_configure(cpu, attr);
+        ifdbgprint(kDebugSimicsModule, "Calling con->configure");
         con->configure();
         return con_obj;
     }
 
     /**
-     * @brief Disconnect a conneciton from module
+     * @brief Disconnect a connection from module
      *
      * Automatically called by Simics callbacks, doesn't need to be explicitly
      * called by sublcassing modules.
@@ -104,7 +114,7 @@ template <typename SimicsModuleTy, typename ConnectionTy> class SimicsModule {
      * invoke print_stats for any connections to the simulation that may print
      * additional per-connection stats.
      *
-     * Prints nothign by default.
+     * Prints nothing by default.
      *
      */
     virtual inline void print_stats() {
@@ -120,7 +130,7 @@ template <typename SimicsModuleTy, typename ConnectionTy> class SimicsModule {
     }
 
     /**
-     * @brief Used to regiser model with Simics during local_init
+     * @brief Used to register model with Simics during local_init
      *
      * @return conf_class*
      */
@@ -171,7 +181,7 @@ template <typename SimicsModuleTy, typename ConnectionTy> class SimicsModule {
     }
 
     /**
-     * @brief Used to regsiter connection with Simics during local_init
+     * @brief Used to register connection with Simics during local_init
      *
      */
     static inline conf_class *init_connection() {
@@ -239,7 +249,7 @@ template <typename SimicsModuleTy, typename ConnectionTy> class SimicsModule {
      * @brief Common connection attributes
      *
      * The ConnectionTy::register_connection_specific_attributes() can be
-     * overriden in the ConnecitonTy to define custom attributes.
+     * overridden in the ConnectionTy to define custom attributes.
      *
      * @param cl The Simics connection class
      */

@@ -1,6 +1,9 @@
+// Copyright 2024 Intel Corporation
+// SPDX-License-Identifier: MIT
+
 // model: cc-integrity-intra
 // need_kernel: yes
-// simics_args: enable_integrity=1
+// simics_args: enable_integrity=TRUE
 // cxx_flags: -fuse-ld=lld -finsert-intraobject-tripwires=all
 
 #include <gtest/gtest.h>
@@ -41,7 +44,8 @@ TEST(Integrity, test_icv_intra_obj_tripwire_multibuf_good) {
            (char *)structCharVoid->voidSecond, sizeof(*structCharVoid));
     /* FLAW: Use the sizeof(*structCharVoid) which will overwrite the pointer y
      */
-    memcpy(structCharVoid->charFirst, SRC_STR, sizeof(structCharVoid->charFirst));
+    memcpy(structCharVoid->charFirst, SRC_STR,
+           sizeof(structCharVoid->charFirst));
     structCharVoid
             ->charFirst[(sizeof(structCharVoid->charFirst) / sizeof(char)) -
                         1] = '\0'; /* null terminate the string */

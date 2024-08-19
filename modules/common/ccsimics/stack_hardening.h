@@ -1,7 +1,6 @@
-/*
- Copyright 2024 Intel Corporation
- SPDX-License-Identifier: MIT
-*/
+// Copyright 2024 Intel Corporation
+// SPDX-License-Identifier: MIT
+
 #ifndef MODULES_COMMON_CCSIMICS_STACK_HARDENING_H_
 #define MODULES_COMMON_CCSIMICS_STACK_HARDENING_H_
 
@@ -24,8 +23,7 @@ class StackHardening {
 
     virtual inline uint64_t decode_sp(const uint64_t ptr) = 0;
 
-    virtual inline logical_address_t
-    decode_sp(const logical_address_t ptr) final {
+    virtual inline logical_address_t decode_sp(const logical_address_t ptr) {
         return decode_sp(static_cast<const uint64_t>(ptr));
     }
 };

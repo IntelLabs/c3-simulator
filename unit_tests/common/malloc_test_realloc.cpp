@@ -1,3 +1,6 @@
+// Copyright 2024 Intel Corporation
+// SPDX-License-Identifier: MIT
+
 // model: *
 // skip: zts
 // xfail: -integrity
@@ -24,6 +27,8 @@ TEST(Realloc, SmallToLarge) {
     // init_crypto_key_struct(&crypto_key);
     int small_size = 8;
     int large_size = 1 << 30;
+    // Full test moved to malloc_test_realloc_slow.cpp
+    large_size = 1 << 18;
     // init reference data
     int ref_size = small_size;
     uint8_t ref_data[ref_size];
@@ -49,6 +54,8 @@ TEST(Realloc, LargeToSmall) {
     // init_crypto_key_struct(&crypto_key);
     int small_size = 8;
     int large_size = 1 << 30;
+    // Full test moved to malloc_test_realloc_slow.cpp
+    large_size = 1 << 18;
     // init reference data
     int ref_size = small_size;
     uint8_t ref_data[ref_size];
@@ -69,54 +76,16 @@ TEST(Realloc, LargeToSmall) {
     }
     free(p_new);
 }
-TEST(Realloc, SmallToExtraLarge) {
-    size_t small_size = 8;
-    size_t large_size = 1ULL << 32;
-    // init reference data
-    size_t ref_size = small_size;
-    uint8_t ref_data[ref_size];
-    for (size_t i = 0; i < ref_size; i++) {
-        ref_data[i] = (uint8_t)rand();
-    }
-    uint8_t *p = (uint8_t *)malloc(small_size);
-    for (size_t i = 0; i < ref_size; i++) {
-        p[i] = ref_data[i];
-    }
-    uint8_t *p_new = (uint8_t *)realloc(p, large_size);
-    // check whether old data survived
-    for (size_t i = 0; i < ref_size; i++) {
-        ASSERT_EQ(ref_data[i], p_new[i]);
-    }
-    free(p_new);
-}
-TEST(Realloc, ExtraLargeToSmall) {
-    size_t small_size = 8;
-    size_t large_size = 1ULL << 32;
-    // init reference data
-    size_t ref_size = small_size;
-    uint8_t ref_data[ref_size];
-    for (size_t i = 0; i < ref_size; i++) {
-        ref_data[i] = (uint8_t)rand();
-    }
-    uint8_t *p = (uint8_t *)malloc(large_size);
-    for (size_t i = 0; i < ref_size; i++) {
-        p[i] = ref_data[i];
-    }
-    uint8_t *p_new = (uint8_t *)realloc(p, small_size);
-    // check whether old data survived
-    for (size_t i = 0; i < ref_size; i++) {
-        ASSERT_EQ(ref_data[i], p_new[i]);
-    }
-    free(p_new);
-}
 
 TEST(Realloc, CheckOldData_LargeAlloc) {
     // pointer_key_t crypto_key;
     // init_crypto_key_struct(&crypto_key);
     srand(123456);
     size_t max_size = 10000;
+    // Full test moved to malloc_test_realloc_slow.cpp
+    max_size = 520;
     uint8_t ref_data[max_size];
-    for (size_t i = 0; i < 10000; i++) {
+    for (size_t i = 0; i < max_size; i++) {
         size_t size = 1 + (((int)rand()) % max_size);
         for (size_t i = 0; i < size; i++) {
             ref_data[i] = (uint8_t)rand();
@@ -151,7 +120,7 @@ TEST(Realloc, CheckOldData_LargeAlloc) {
             int match = (ref_data[offset] == p_new[offset]) ? 1 : 0;
             if (!match) {
                 printf("i=%d\n", i);
-                printf("Missmatch on realloc:\n");
+                printf("Mismatch on realloc:\n");
                 printf("size    =%d\n", (int)size);
                 printf("new_size=%d\n", (int)new_size);
                 printf("offset  =%d\n", (int)offset);
