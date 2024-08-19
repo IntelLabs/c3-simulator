@@ -1,0 +1,185 @@
+= Automation to run NIST Juliet testcases
+:source-highlighter: pygments
+:source-language: shell
+
+This directory contains scripts to assist with running NIST Juliet tests on the Cryptographic Computing (C3) models.
+
+== Overview
+The NIST Juliet Test Suite for C/C++ encompasses 28881 testcase pairs, representing both good and bad program behavior. These cases are systematically organized under 118 unique Common Weakness Enumerations (CWEs). Each CWE is further subdivided into Common Vulnerabilities and Exposures (CVE) variants. A particular CVE variant replicates a unique behavior numerous times, gradually increasing its obfuscation level to challenge static analysis tools. Although Juliet's primary aim is to evaluate static analysis tools, it is still valuable for assessing runtime defenses such as C3. This study focuses on three specific CWEs tested against C3 heap protection: **CWE-122 "Heap-Based Buffer Overflow"**, **CWE-416 "Use After Free"**, and **CWE-457 "Use of Uninitialized Variable"**. We also adapt select testcases from **CWE-122 "Heap-Based Buffer Overflow"** and show C3 stack protection against stack variable manipulation attacks. Please refer to the _Deliverable 16 report_ for further details on the NIST Juliet framework and test results.
+
+
+== Testing Methodology
+As Juliet was designed for static analysis, not every testcase is usable for testing a runtime defense.
+Some only generate memory-unsafe behavior during an unpredictable subset of runs, and others never actually generate memory-unsafe behavior on the heap at runtime. These testcases can be summarized as follows:
+
+1. Random cases: These testcases execute vulnerable code blocks based on the output of link:testcasesupport/io.c[`globalReturnsTrueOrFalse()`] function, which in turn relies on the `rand()` function. In essence, the execution of the vulnerable section is contingent upon specific return values from the `globalReturnsTrueOrFalse()` function found in link:testcasesupport/io.c[`testcasesupport/io.c`]. To illustrate, in one such testcase in link:testcases/CWE122_Heap_Based_Buffer_Overflow/s01/CWE122_Heap_Based_Buffer_Overflow__char_type_overrun_memcpy_12.c[`testcases/CWE122_Heap_Based_Buffer_Overflow/s01/CWE122_Heap_Based_Buffer_Overflow__char_type_overrun_memcpy_12.c`], the vulnerable code triggers only when the function returns a non-zero value. For CWE-457 specifically, we adjusted tests to eliminate this randomness and execute unconditionally.
+
+2. Cases with no memory-unsafe behavior: This set contains cases that, by design, won't produce any memory-unsafe behavior during runtime.  An example includes a variant that tests a type error where a pointer to an 8-byte type was used instead of the 8-byte type itself to determine the amount of heap memory to allocate for an object of that type. These would result in too little memory being allocated on a machine with 32-bit pointers. However, these are not runtime bugs on a 64-bit machine, as both expressions are 8-byte sizes. An example of such a case is: link:testcases/CWE122_Heap_Based_Buffer_Overflow/s11/CWE122_Heap_Based_Buffer_Overflow__sizeof_int64_t_01.c[`testcases/CWE122_Heap_Based_Buffer_Overflow/s11/CWE122_Heap_Based_Buffer_Overflow__sizeof_int64_t_01.c`].
+
+=== Heap Buffer Overflow  Test Cases
+The testcases within CWE-122 are organized into 11 directories. We filtered out the two inapplicable test categories described above. We also exclude the testcases that take inputs from a socket, which blocks their forward progress. For clarity, the following table encapsulates the total testcases, excluding the ones that use socket programming, under CWE-122. It lists the number of inapplicable testcases as well as the number of testcases that crash even without C3 being enabled (“self-crashing”). The final column shows that all relevant sample vulnerabilities are detected by C3.
+
+[options="header"]
+|==============================================================================================================
+|            | Total testcases | Random testcases | Testcases with no memory-unsafe behavior | Remaining testcases | Self-crashing testcases | Detected when C3 is enabled
+| CWE-122    | 3582 | 72    | 186   | 3324   | 931 | 3324
+| Percentage | -    | 2.01% | 5.19% | 92.80% |     | 100% of remaining testcases
+|==============================================================================================================
+
+We also adapted a subset of the CWE-122 testcases to test the efficacy of C3 stack encryption. The following table summarizes the results from those tests. It shows that all of the adapted tests are detected by C3.
+[options="header"]
+|==============================================================================================================
+|                       | Total testcases | Self-crashing testcases | Detected when C3 is enabled
+| Stack corruption tests|       25        |         0               |       25
+| Percentage            | -               |                         | 100% of testcases
+|==============================================================================================================
+
+
+### Use After Free Test Cases
+
+The following table summarizes the tests under CWE-416 and the associated results, which also shows that all relevant sample vulnerabilities are detected by C3.
+
+[options="header"]
+|==============================================================================================================
+|            | Total testcases | Random testcases | Testcases with no memory-unsafe behavior | Remaining testcases | Self-crashing testcases | Detected when C3 is enabled
+| CWE-416    | 394  | 18    | 1     | 375     | 0   |  375
+| Percentage | -    | 4.57% | 0.25% | 95.18%  |     | 100% of remaining testcases
+|==============================================================================================================
+
+### Use of Uninitialized Variable Test Cases
+
+The following table summarizes the tests under CWE-457 and the associated results. Testcases that read from uninitialized variables on the stack or use the C++ new constructor are both out-of-scope. This table also shows that all relevant sample vulnerabilities are detected by C3.
+
+[options="header"]
+|==============================================================================================================
+|            | Total testcases | Out-of-scope testcases | Remaining testcases | Self-crashing testcases | Detected when C3 is enabled
+| CWE-457    | 950  | 774   | 176   | 0     | 176
+| Percentage | -    | 81%   | 19%   |       | 100% of remaining testcases
+|==============================================================================================================
+
+In summary, C3 with emulated integrity checking is able to detect 100% of relevant heap buffer overflow (CWE-122), adapted stack corruption tests, use-after-free (CWE-416), and uninitialized use (CWE-457) sample vulnerabilities in Juliet.
+
+== Quick Start
+=== Running Testcases
+The `run_juliet.sh` script runs the NIST Juliet testcases for CWE-122 (Heap buffer overflow, CWE-416 (Use-after-free), CWE-457 (Use of Uninitialized Variable), Stack vulnerability testcases and tests the detection efficacy of C3. This script
+
+* downloads and unpacks the NIST Juliet testcases
+* patches the Makefiles to enable C3 detection
+* uploads the NIST Juliet test-suite to Simics
+* generates the appropriate Simics checkpoint, if it's not there
+* compiles and runs the testcases within Simics
+* exports the C3 detection results to the host machine
+
+From the simics root directory, run `run_juliet.sh` with appropriate parameters.
+
+`./tests/nist-juliet/scripts/run_juliet.sh [ARGS]`
+
+ -m
+    Selects the model to run for Simics execution. With "native", testcases are run without any protection. Model "c3" enables C3 protection.
+
+ -h
+    Enables or disables C3 heap protection when running the heap testcases. Value can be 0 or 1.
+
+ -s
+    Enables or disables C3 stack protection when running the stack testcases. Value can be 0 or 1.
+
+ -a
+    Shifts the memory allocation to the right to detect 1 byte overflow. Value can be 0 or 1.
+
+ -w
+    Writes the execution summary of the testcases to an excel file. Value can be 0 or 1.
+
+ -e
+    Specify any environment variable.
+
+The specific commands to run the testcases with various configuration are shown below:
+
+ * Run heap testcases without C3 heap protection:
+    `./tests/nist-juliet/scripts/run_juliet.sh -m native`
+
+ * Run stack testcases without C3 stack protection:
+    `./tests/nist-juliet/scripts/run_juliet.sh -m native -s 1`
+
+ * Run heap testcases with C3 heap protection w/o allocation right alignment:
+	`./tests/nist-juliet/scripts/run_juliet.sh -m c3 -h 1`
+
+ * Run heap testcases with C3 heap protection and right alignment:
+	`./tests/nist-juliet/scripts/run_juliet.sh -m c3 -h 1 -a 1`
+
+ * Run stack testcases with C3 stack protection:
+	`./tests/nist-juliet/scripts/run_juliet.sh -m c3 -s 1`
+
+If there is no argument given to the script, the testcases will run for default parameters of `-m c3 -h 1 -a 1`.
+
+The test output will be generated in `results/CWE122/CWE122.xlsx`, `results/CWE416/CWE416.xlsx`, and `results/CWE122/CWE457.xlsx`, for the respective CWEs, containing the output of each testcase and then summarizing the C3 detection rate. The `Summary` tab in the resulting excelsheet shows the overall C3 detection rate and then a breakdown of C3 performance for individual directory of testcases. The output of stack tests will generate `results/CWE122/CWE122_stack.xlsx`.
+
+== Step-by-step Process
+In order to download and Extract NIST Juliet test suite and run individual testcases, you may follow the following steps.
+
+=== Download and Extract NIST Juliet Test-suite
+First, download the NIST Juliet testsuit from the following link https://samate.nist.gov/SRD/testsuites/juliet/Juliet_Test_Suite_v1.3_for_C_Cpp.zip into the `tests/nist-juliet` directory. Then, unpack the test-suite and rename the `C` as `test-suite`. The following command will take care of the downloading and unpacking the test-suite.
+----
+$ wget https://samate.nist.gov/SRD/testsuites/juliet/Juliet_Test_Suite_v1.3_for_C_Cpp.zip -P "tests/nist-juliet"
+$ unzip -d "tests/nist-juliet/" -q "tests/nist-juliet/Juliet_Test_Suite_v1.3_for_C_Cpp.zip"
+$ mv "tests/nist-juliet/C" "tests/nist-juliet/test-suite"
+----
+
+=== Run Pre-compiled Testcases
+The simics script `nist-juliet.simics` can be used to run a single testcase or a directory of testcases. To run a pre-compiled testcase:
+----
+$ ./simics tests/nist-juliet/scripts/nist-juliet.simics \
+           workload_dir="tests/nist-juliet/test-suite/testcases/CWE122_Heap_Based_Buffer_Overflow/s01" \
+           workload_name="CWE122_Heap_Based_Buffer_Overflow__cpp_CWE129_fgets_01.out" \
+           checkpoint=checkpoints/cc_kernel_1b_ovf.ckpt \
+           upload_juliet=1 \
+           enable_integrity=1
+----
+
+To run all the pre-compiled testcases within a given directory:
+----
+$ ./simics tests/nist-juliet/scripts/nist-juliet.simics \
+           workload_dir="tests/nist-juliet/test-suite/testcases/CWE122_Heap_Based_Buffer_Overflow/s01" \
+           checkpoint=checkpoints/cc_kernel_1b_ovf.ckpt \
+           upload_juliet=1 \
+           enable_integrity=1
+----
+Note that, `checkpoints/cc_kernel.ckpt` or `checkpoints/cc_kernel_1b_ovf.ckpt` are needed to get the C3 protection. To generate these checkpoints, run `make ckpt-cc_kernel`, `make ckpt-cc_kernel_1b_ovf`, respectively.
+
+=== Compile and Run Testcases
+The NIST Juliet testcase(s) may be compiled either in the host or within simics. In any case, the Makefile should be first patched to enable C3 protection. The `patch_makefile.sh` script can be used to modify a single Makefile or a number of Makefiles within a given directory of testcases.
+
+To patch the Makefile for a single directory of testcases
+----
+$ source tests/nist-juliet/scripts/patch_makefile.sh && modify_makefile "tests/nist-juliet/test-suite/testcases/CWE122_Heap_Based_Buffer_Overflow/s01" <model> <protect_stack>
+----
+
+To patch all the Makefiles in a given directory of testcases
+----
+$ source tests/nist-juliet/scripts/patch_makefile.sh && generate_c3_makefile "tests/nist-juliet/test-suite/testcases/CWE122_Heap_Based_Buffer_Overflow" <model> <protect_stack>
+----
+
+Afterwards, to compile the testcases in the host, run: `$ make clean -f Makefile-c3 && make individuals -f Makefile-c3`
+It will create two binaries per test case: `\*.out` and `*.out.bad`. `\*.out` should not exhibit any memory safety violations, whereas `*.out.bad` may exhibit memory safety violations.
+
+To compile the testcases within Simics:
+----
+$ ./simics tests/nist-juliet/scripts/nist-juliet.simics \
+           workload_dir="tests/nist-juliet/test-suite/testcases/CWE122_Heap_Based_Buffer_Overflow/s01" \
+           checkpoint=checkpoints/cc_kernel_1b_ovf.ckpt \
+           upload_juliet=1 \
+           build=1 \
+           enable_integrity=1 \
+           write_output=1 \
+           result_file="tests/nist-juliet/results/output.csv"
+----
+The `build` argument is used to compile the testcases within simics. To write the test output to a particular file, the `write_output` and `result_file` arguments are used.
+
+=== Save a Checkpoint
+This command only saves a checkpoint with the latest NIST Juliet testcases and scripts, without running any workload. It might be useful to generate a checkpoint with the NIST Juliet testsuite and the scripts, thus avoiding the uploading of NIST Juliet test-suite everytime. It is, however, not necessary to run the testcases.
+----
+$ ./simics tests/nist-juliet/scripts/nist-juliet.simics \
+           checkpoint=checkpoints/cc_kernel_1b_ovf.ckpt \
+           upload_juliet=1 \
+           enable_integrity=1 \
+           save_checkpoint=1
+----

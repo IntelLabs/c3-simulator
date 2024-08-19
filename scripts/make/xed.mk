@@ -1,4 +1,4 @@
-# Copyright 2023 Intel Corporation
+# Copyright 2023-2024 Intel Corporation
 # SPDX-License-Identifier: MIT
 
 ifndef SCRIPTS_MAKE_XED_MK_

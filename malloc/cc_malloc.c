@@ -1,9 +1,8 @@
-/*
- Copyright 2016 Intel Corporation
- SPDX-License-Identifier: MIT
-*/
+// Copyright 2016-2024 Intel Corporation
+// SPDX-License-Identifier: MIT
+
 // Reference implementations of functions box, malloc, calloc, realloc, etc.
-// These implementations are enviornment agnostic; it should not depend if
+// These implementations are environment agnostic; it should not depend if
 // glibc or wrappers are used.
 // External file must define
 //   - REAL_MALLOC
@@ -20,10 +19,16 @@
 //   - The headers required for REAL_* functions
 // This file should not be compiled directly! Import it with #include
 
+#include <stdio.h>
+#include <stdlib.h>
 #include "cc_globals.h"  // NOLINT
-
 // Helper function to unset ICV values before free()
-static void cc_pre_real_free_clear_icv(void *ptr) {
+static void *cc_pre_real_free_clear_icv(void *ptr) {
+#ifdef CC_DETECT_1B_OVF
+    uintptr_t ptr_int = (uintptr_t)ptr;
+    ptr_int &= ICV_ADDR_MASK;
+    ptr = (void *)ptr_int;
+#endif
 #ifdef CC_ICV_ENABLE
     // Clear ICV for old allocation
     if (!is_encoded_cc_ptr((uint64_t)ptr)) {
@@ -31,8 +36,20 @@ static void cc_pre_real_free_clear_icv(void *ptr) {
         cc_set_icv(ptr, old_malloc_size);
     }
 #endif  // CC_ICV_ENABLE
+    return ptr;
 }
 
+#define ZERO_ON_ALLOC 0
+
+/**
+ * @brief If set to 1, the memory allocated by malloc will be zeroed out.
+ *
+ * NOTE that functions such as realloc require separate handling as they may
+ * reuse previously allocated memory and thus cannot be zeroed.
+ */
+static const int kZeroOnAlloc = ZERO_ON_ALLOC;
+
+static inline void *call_real_malloc(size_t size) { return REAL_MALLOC(size); }
 
 static void *quarantine_buffers[QUARANTINE_WIDTH][QUARANTINE_DEPTH] = {0};
 static int quarantine_current_buffer = 0;
@@ -72,17 +89,18 @@ void quarantine_insert(void *ptr) {
     }
 }
 
-
 static uint8_t curr_version = 0;
 
 void assign_version(uint64_t ptr, size_t size, ptr_metadata_t *ptr_metadata) {
     ptr_metadata->version_ = curr_version;
+
     curr_version = (curr_version + 1) % (1 << VERSION_SIZE);
     return;
 }
 
 void *cc_malloc_encoded(size_t size) {
-    void *ptr = REAL_MALLOC(size);
+    void *ptr = call_real_malloc(size);
+
     if (!ptr)
         return NULL;
     // kprintf(stderr, "GLIBC WRAPPER: original malloc(%d) pointer =%p\n", (int)
@@ -102,8 +120,8 @@ void *cc_malloc_encoded(size_t size) {
         p_encoded = ptr;
     }
 #ifdef CC_ICV_ENABLE
-    // Setup ICV for allocation
-    cc_set_icv(p_encoded, malloc_size);
+    p_encoded =
+            cc_setup_icv_for_alloc(p_encoded, size, malloc_size, kZeroOnAlloc);
 #endif  // CC_ICV_ENABLE
     kprintf(stderr, "GLIBC WRAPPER: encoded malloc(%ld) = %p into %p\n", size,
             ptr, p_encoded);
@@ -112,7 +130,9 @@ void *cc_malloc_encoded(size_t size) {
 
 void *cc_calloc_encoded(size_t num, size_t size) {
     size_t total_size = num * size;
-    void *ptr = REAL_MALLOC(total_size);
+
+    void *ptr = call_real_malloc(total_size);
+
     if (!ptr)
         return NULL;
     size_t malloc_size = MALLOC_USABLE_SIZE(ptr);
@@ -131,8 +151,7 @@ void *cc_calloc_encoded(size_t num, size_t size) {
     }
 
 #ifdef CC_ICV_ENABLE
-    // Setup ICV for allocation
-    cc_set_icv_and_zero(p_encoded, malloc_size);
+    p_encoded = cc_setup_icv_for_alloc(p_encoded, total_size, malloc_size, 1);
 #elif !defined(CC_ARCH_NOT_SUPPORT_MEMORY_ACCESS)
     // Encrypted Memset
     uint8_t *dst = (uint8_t *)p_encoded;
@@ -156,19 +175,31 @@ void *cc_realloc_encoded(void *p_old_encoded, size_t size) {
         p_old_decoded =
                 (void *)decode_pointer((uint64_t)p_old_encoded, &pointer_key);
 #endif  // USE_CC_ISA
-        size_t old_malloc_size = MALLOC_USABLE_SIZE(p_old_decoded);
+
+        void *p_old_decoded_adj = p_old_decoded;
+#if defined(CC_ICV_ENABLE) && defined(CC_DETECT_1B_OVF)
+        uintptr_t p_old_decoded_adj_int = (uintptr_t)p_old_decoded_adj;
+        p_old_decoded_adj_int &= ICV_ADDR_MASK;
+        p_old_decoded_adj = (void *)p_old_decoded_adj_int;
+#endif
+        size_t old_malloc_size = MALLOC_USABLE_SIZE(p_old_decoded_adj);
+
         // Min of size implied by encoded pointer and implied by glibc metadata
         size_old = min_size(get_size_in_bytes((uint64_t)p_old_encoded),
                             old_malloc_size);
+
     } else {
         p_old_decoded = p_old_encoded;
         size_old = MALLOC_USABLE_SIZE(p_old_encoded);
     }
+
     size_t size_to_alloc = size;
-    void *p_new_decoded = REAL_MALLOC(size_to_alloc);
+
+    void *p_new_decoded = call_real_malloc(size_to_alloc);
+
     if (!p_new_decoded)
         return NULL;  // POSIX Compliance: Realloc returns NULL if the
-                      // opperation is unsucessful, and the old memory is not
+                      // operation is unsuccessful, and the old memory is not
                       // freed/altered
 
     size_t new_malloc_size = MALLOC_USABLE_SIZE(p_new_decoded);
@@ -189,13 +220,15 @@ void *cc_realloc_encoded(void *p_old_encoded, size_t size) {
 
 #ifdef CC_ICV_ENABLE
     // Setup ICV for allocation
-    cc_set_icv(p_new_encoded, new_malloc_size);
+    p_new_encoded = cc_setup_icv_for_alloc(p_new_encoded, size, new_malloc_size,
+                                           kZeroOnAlloc);
 #endif
 #ifndef CC_ARCH_NOT_SUPPORT_MEMORY_ACCESS
     // Encrypted memcpy
     uint8_t *src = (uint8_t *)p_old_encoded;
     uint8_t *dst = (uint8_t *)p_new_encoded;
     size_t size_to_copy = min_size(size, size_old);
+
     if (size_to_copy != 0) {
         assert(src != NULL);
         assert(dst != NULL);
@@ -205,7 +238,7 @@ void *cc_realloc_encoded(void *p_old_encoded, size_t size) {
     }
 #endif
 
-    cc_pre_real_free_clear_icv(p_old_decoded);
+    p_old_decoded = cc_pre_real_free_clear_icv(p_old_decoded);
     REAL_FREE(p_old_decoded);
     kprintf(stderr, "***** cc_realloc *****\n");
     kprintf(stderr, "p_old_encoded=0x%016lx\n", (uint64_t)p_old_encoded);
@@ -233,6 +266,6 @@ void cc_free_encoded(void *p_in) {
     // Need to reset ICV regardless of quarantine for now, the reason being
     // that the quarantine buffer is not cleared on exit, potentially leaving
     // ICVs around even on otherwise clean exit.
-    cc_pre_real_free_clear_icv(ptr);
+    ptr = cc_pre_real_free_clear_icv(ptr);
     quarantine_insert(ptr);
 }

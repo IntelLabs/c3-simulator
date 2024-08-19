@@ -1,3 +1,6 @@
+// Copyright 2024 Intel Corporation
+// SPDX-License-Identifier: MIT
+
 // model: *
 // nomodel: lim -integrity
 #include <unistd.h>
@@ -7,7 +10,7 @@
 using namespace std;
 
 static inline void test_decryption(uint64_t *const c_ptr) {
-    //const char c = 'A';
+    // const char c = 'A';
     const uint64_t c = 0xDEADBEEF;
     // MAGIC(0);
     *c_ptr = c;
@@ -34,12 +37,12 @@ static inline void test_decryption(uint64_t *const c_ptr) {
     ASSERT_TRUE(!is_encoded_cc_ptr(c_ptr) || *c_ptr != c);
 }
 
-TEST(DecrypPtrTest, heap) {
+TEST(DecryptPtrTest, heap) {
     uint64_t *c_ptr = (uint64_t *)malloc(sizeof(uint64_t));
     test_decryption(c_ptr);
 }
 
-TEST(DecrypPtrTest, stack) {
+TEST(DecryptPtrTest, stack) {
     uint64_t c;
     uint64_t *c_ptr = &c;
 

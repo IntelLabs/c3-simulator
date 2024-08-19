@@ -1,0 +1,11 @@
+--- tests/nist-juliet/test-suite/testcasesupport/io.c.orig	2024-02-22 18:31:46.808115938 -0800
++++ tests/nist-juliet/test-suite/testcasesupport/io.c	2024-02-22 18:31:52.656115878 -0800
+@@ -157,7 +157,7 @@
+
+ int globalReturnsTrueOrFalse()
+ {
+-    return (rand() % 2);
++    return 1; // C3 patched to avoid non-determinism
+ }
+
+ /* The variables below are declared "const", so a tool should

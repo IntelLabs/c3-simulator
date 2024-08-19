@@ -1,3 +1,6 @@
+// Copyright 2024 Intel Corporation
+// SPDX-License-Identifier: MIT
+
 // model: cc
 // nomodel: -integrity
 
@@ -25,7 +28,8 @@ char *memcpy_la(char *to, char *from, size_t len) {
 }
 
 char *memcpy_ca(char *to, char *from, size_t len) {
-    // NOTE: Not always same as CA from malloc due to how len is asigned there!!
+    // NOTE: Not always same as CA from malloc due to how len is assigned
+    // there!!
     if (!is_encoded_cc_ptr((void *)to))
         to = (char *)cc_isa_encptr(to, len);
 

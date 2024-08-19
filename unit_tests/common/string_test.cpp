@@ -1,3 +1,6 @@
+// Copyright 2024 Intel Corporation
+// SPDX-License-Identifier: MIT
+
 // model: *
 #include <assert.h>
 #include <ctype.h>
@@ -276,7 +279,11 @@ TEST(STRING, strcat) {
 TEST(STRING, mallocstrcat) {
     srand(SRAND_SEED);
     char *buff, *str_offset, *str1, *str2;
+#ifdef KEEP_SLOW  // Moved to string_test_slow.cpp
     size_t max_length = 128;
+#else
+    size_t max_length = 64;
+#endif
     for (size_t alloc_length = 2; alloc_length < max_length; alloc_length++) {
         buff = (char *)malloc(sizeof(char) * (alloc_length + 17));
         for (int offset = 0; offset < 16; offset++) {
@@ -326,7 +333,11 @@ TEST(STRING, mallocstrcatrandomsize) {
 TEST(STRING, mallocstrncat) {
     srand(SRAND_SEED);
     char *buff, *str_offset, *str1, *str2;
+#ifdef KEEP_SLOW  // Moved to string_test_slow.cpp
     size_t max_length = 128;
+#else
+    size_t max_length = 64;
+#endif
     for (size_t alloc_length = 2; alloc_length < max_length; alloc_length++) {
         buff = (char *)malloc(sizeof(char) * (alloc_length + 17));
         for (int offset = 0; offset < 16; offset++) {
@@ -474,11 +485,17 @@ TEST(FORMAT, blender_vsnprintf) {
 }
 
 TEST(MEMCPY, CopyNBytesFromRefToBuffer) {
+#ifdef KEEP_SLOW  // Moved to string_test_slow.cpp
     int max_size = 1 << 16;
-    int ref_size = max_size;
+    int max_bytes = 1 << 13
+#else
+    int max_size = 1 << 13;
+    int max_bytes = 1 << 9;
+#endif
+                    int ref_size = max_size;
     uint8_t ref_data[ref_size];
     init_reference_data_sequential(ref_data, ref_size);
-    for (int bytes = 0; bytes < (1 << 13); bytes++) {
+    for (int bytes = 0; bytes < max_bytes; bytes++) {
         uint8_t *p = (uint8_t *)calloc(1, bytes);
         /*
         if (bytes==4856){

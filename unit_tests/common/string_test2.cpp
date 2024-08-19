@@ -1,3 +1,6 @@
+// Copyright 2024 Intel Corporation
+// SPDX-License-Identifier: MIT
+
 // model: *
 // xfail: -integrity-intra
 #include <assert.h>
@@ -153,7 +156,11 @@ TEST(STRING, mallocmemmoverandomsize) {
 TEST(STRING, mallocmemmem) {
     srand(SRAND_SEED);
     char *buff, *str_offset, *str;
+#ifdef KEEP_SLOW  // Moved to string_test2_slow.cpp
     size_t max_length = 128;
+#else
+    size_t max_length = 64;
+#endif
     for (size_t alloc_length = 5; alloc_length < max_length; alloc_length++) {
         buff = (char *)malloc(sizeof(char) * (alloc_length + 17));
         for (int offset = 0; offset < 16; offset++) {
@@ -285,7 +292,11 @@ TEST(STRING, mallocmemccpyrandomsize) {
 TEST(STRING, mallocmemcmp) {
     srand(SRAND_SEED);
     char *buff, *str_offset, *str;
+#ifdef KEEP_SLOW  // Moved to string_test2_slow.cpp
     size_t max_length = 128;
+#else
+    size_t max_length = 64;
+#endif
     for (size_t alloc_length = 10; alloc_length < max_length; alloc_length++) {
         buff = (char *)malloc(sizeof(char) * (alloc_length + 17));
         for (int offset = 0; offset < 16; offset++) {

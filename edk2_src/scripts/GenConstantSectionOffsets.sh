@@ -1,6 +1,7 @@
 #!/bin/bash
-# Copyright 2023 Intel Corporation
+# Copyright 2023-2024 Intel Corporation
 # SPDX-License-Identifier: MIT
+
 # set -x
 set -e
 

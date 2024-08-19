@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright 2023 Intel Corporation
+# Copyright 2023-2024 Intel Corporation
 # SPDX-License-Identifier: MIT
 
 # NOTE! Cannot set -u due to errors in the EDK2 scripts that need to be sourced!

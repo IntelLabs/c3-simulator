@@ -1,7 +1,6 @@
-/*
- Copyright 2024 Intel Corporation
- SPDX-License-Identifier: MIT
-*/
+// Copyright 2024 Intel Corporation
+// SPDX-License-Identifier: MIT
+
 #ifndef CRYPTO_SW_ENCODER_H_
 #define CRYPTO_SW_ENCODER_H_
 

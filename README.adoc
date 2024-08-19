@@ -1,13 +1,20 @@
 = Cryptographic Capability Computing (C3) Simulator
 :toc: macro
+:toc-placement!:
+ifdef::env-github[]
+:tip-caption: :bulb:
+:note-caption: :information_source:
+:important-caption: :heavy_exclamation_mark:
+:caution-caption: :fire:
+:warning-caption: :warning:
+endif::[]
 :source-highlighter: pygments
 :source-language: bash
-
-:ispm-base: intel-simics-package-manager-1.7.5
-:ispm-base-stem: intel-simics-package-manager-1.7.5-linux64
-:simics-base: /opt/simics/simics-6.0.169
-:simics-pkg-ver: 2023.31
-:simics-pkg-ver-stem: simics-6-packages-2023-31-linux64
+:ispm-base: intel-simics-package-manager-1.8.3
+:ispm-base-stem: intel-simics-package-manager-1.8.3-linux64
+:simics-base: /opt/simics/simics-6.0.185
+:simics-pkg-ver: 2024.05
+:simics-pkg-ver-stem: simics-6-packages-2024-05-linux64
 :simics-repo-url: https://github.com/IntelLabs/c3-simulator.git
 :simics-public-url: https://software.intel.com/content/www/us/en/develop/articles/simics-simulator.html
 :CKPT_NOKERNEL_BASE: /opt/simics/checkpoints/glibc_latest.ckpt
@@ -18,16 +25,29 @@
 :SIMICS_BIN: /opt/simics/simics-6/simics-latest/bin
 :SIMICS_DEF_MODULE: c3
 
-WARNING: The contents of this repository and linked repositories are solely for
+[WARNING]
+====
+The contents of this repository and linked repositories are solely for
 research purposes and may contain software with vulnerabilities, such as
-outdated libraries. Do not use in production.
+outdated libraries.
 
+**Do not use in production.**
+====
+
+C3-Simulator is a Simics-based functional simulator for the X86 C3 processor,
+including library and kernel support for pointer and data encryption, optional
+compile-time instrumentation, debugger enabling, and scripting for running
+tests.
+
+[NOTE]
+====
 This material is based upon work supported by the Naval Information Warfare
 Center Pacific and the Defense Advanced Research Project Agency under Prototype
 Other Transaction Agreement No. N66001-23-9-4004. Any opinions, findings and
 conclusions or recommendations expressed in this material are those of the
 author(s) and do not necessarily reflect the views of the Naval Information
 Warfare Center Pacific or the Defense Advanced Research Project Agency.
+====
 
 ---
 
@@ -35,143 +55,469 @@ toc::[]
 
 == Quick Start
 
-This quick start is tested on Ubuntu 20.04. It assumes dependencies, including
-the Simics simulator, are installed, Simics is installed. To install Simics, see
-<<Install Simics>>. To install the remaining dependencies, see
-<<Install other dependencies>>.
+To use the C3 simulator you only need Docker and the public Simics packages.
+This allows you to build the environments and run Simics from within the Docker
+container. While most builds are using Make on the host you can also open a
+shell to Docker with `make c3_docker_shell`. To use the Simics GUI you need to
+run Simics on your host machine, see <<Installing and running Simics on host>>.
 
-=== Setting up the C3 simulator
+If you need to use a network proxy, please see <<Proxy configuration>>.
 
-To setup user-space C3 environment:
+See <<C3 protected user-space applications>>, <<C3 protected Linux kernel>>,
+and <<C3 protected EDK2>> for details on running alternate configurations and
+building the C3 protected Linux kernel or EDK2 firmware.
+
+See <<C3 development environment>> for more details on modifying and
+experimenting with the C3 Simics model and associated software artifacts. For
+more specific details on the Simics model, see <<C3 Simics simulation model>>.
+
+=== Quick-start: Setting up the C3 simulator
+
+To setup Simics, setup the build environment, and generate Simics checkpoints,
+you need to manually download the Simics packages, clone the C3 simulator code
+and then place the Simics packages in the `scripts/docker` folder:
 
 [source,subs=attributes]
 ----
 # Clone repository
-mkdir -p [CC_INSTALL_DIRECTORY]
-cd [CC_INSTALL_DIRECTORY]
-git clone --recurse-submodules {simics-repo-url} .
+git clone --recurse-submodules {simics-repo-url} c3-simulator
+cd c3-simulator
 
-# Configure Simics project with default SIMICS_BIN={SIMICS_BIN}
-make -f config-user.mk simics_setup
-# or, if needed, set SIMICS_BIN explicitly
-make -f config-user.mk simics_setup SIMICS_BIN=/some/other/path/to/simics
+# Copy simics packages (or put files in /opt/simics/simics_packages_public)
+cp ~/Downloads/{ispm-base-stem}.tar.gz \
+   ~/Downloads/{simics-pkg-ver-stem}.tar.gz \
+   scripts/dokcer
 
-# Generate checkpoint (built upon {CKPT_NOKERNEL_BASE}, if available)
-make ckpt-cc_llvm
-
-# Build C3 Simics modules
-make -B
+# Pre-build Docker container (may take >1h first time)
+make c3_docker
 ----
 
+==== Optional: Running Simics on host
 
-
-=== Running simple workloads
-
-To run simple workloads (e.g., `microbenchmarks/hello.cpp`):
+You can also setup the Simics project on your host and run `./simics` and other
+scripts directly on your host machine. But note that you must use the Simics
+version used by the Docker container, and install other dependencies (See
+<<Installing and running Simics on host>> for more details):
 
 [source,subs=attributes]
 ----
-./simics scripts/runworkload_common.simics \
-    src_path=microbenchmarks \
-    src_file=hello.cpp \
-    workload_name=a.out \
-    model={SIMICS_DEF_MODULE} \
-    checkpoint={CKPT_LLVM} \
-    gcc_flags="-g -gdwarf -Werror -ldl -lm -lpthread -pthread -Iinclude"
+make simics_setup SIMICS_BIN=[CUSTOM_SIMICS_PATH]
 ----
 
-=== Running pre-compiled binaries
+=== Quick-start: C3 protected user-space applications
+
+Once you have configured the project for use with Docker, you can use the
+following commands to build a checkpoint and run Simics within the container:
 
 [source,subs=attributes]
 ----
-clang++ microbenchmarks/hello.cpp -o a.out
-./simics scripts/runworkload_common.simics \
-    src_path=. \
-    src_file=a.out \
-    workload_name=a.out \
-    model={SIMICS_DEF_MODULE} \
-    checkpoint={CKPT_LLVM} \
-    nobuild=TRUE \
-    env_vars="LD_LIBRARY_PATH=/home/simics/glibc/glibc-2.30_install/lib"
+# Generate {CKPT_KERNEL} Simics checkpoint (with C3-aware kernel)
+make cc_kernel
+
+# Enter docker container (Optional if running Simics on host)
+make c3_docker_shell
+
+# To run simple workload (e.g., `microbenchmarks/hello.cpp`):
+docker> ./simics scripts/runworkload_common.simics \
+            checkpoint={CKPT_LLVM} \
+            model={SIMICS_DEF_MODULE} \
+            src_file=microbenchmarks/hello.cpp
+
+# To run pre-compiled binary
+docker> g++ microbenchmarks/hello.cpp -o a.out
+docker> ./simics scripts/runworkload_common.simics \
+             checkpoint={CKPT_LLVM} \
+            model={SIMICS_DEF_MODULE} \
+            nobuild=TRUE \
+            src_file=a.out
 ----
 
-=== Running unit tests
+See <<C3 protected user-space applications>> for more details.
 
-To run individual unit tests (.e.g, `unit_tests/common/gtest_hello.cpp`):
+### Quick-start: C3 protected Linux kernel
+
+To build and run C3-hardened Linux kernel, run:
+
+[source,subs=attributes]
+----
+# Setup buildroot and prepare Buildroot build
+make c3_docker-linux_buildroot_setup
+make c3_docker-linux_buildroot_prepare
+# Build Buildroot system (may take >1h)
+make c3_docker-linux_buildroot_build
+
+# Run Buildroot system with C3 enabled on Simics
+make c3_docker-linux_buildroot_run
+
+# The  following command also combines all the steps:
+make c3_docker-linux_buildroot
+----
+
+See <<C3 protected Linux kernel>> for more details.
+
+### Quick-start: C3 protected EDK2
+
+To boot up a C3-hardened EDK2 you will need to build EDK2 and the Buildroot
+Linux environment that is going to be booted under EDK2. The following commands
+build and boot the environment, and open up a Linux shell booted under the
+C3-hardened EDK2:
+
+[source,subs=attributes]
+----
+# Building EDK2 (note this will take >1h the first time)
+make edk2_all
+
+# Boot EDK2
+make edk2_run
+----
+
+See <<C3 protected EDK2>> for more details.
+
+== C3 demos
+
+=== Clang Tidy
+
+The C3 LLVM include a clang-tidy to help optimize code for C3 intra-object
+protections by suggesting various code changes to achieve optimal memory
+layouts. Note that while vanilla C3 does not require memory layout changes, the
+intra-object protection uses tripwires that require memory layout changes;
+which is what the C3 clang-tidy helps with.
+
+To run demo and see examples of suggested changes:
+[source,subs=attributes]
+----
+make c3_docker-demo-clang_tidy.sh
+----
+
+=== Uninitialized Memory Read (CWE457) detection
+
+C3 can be used to detect uninitialized memory reads, using integrity check
+values.
+
+To run demo:
+
+[source,subs=attributes]
+----
+make c3_docker-demo-cwe457.sh
+----
+
+=== Stack unwinder hardening
+
+C3 can be used to protect the stack by setting the stack pointer register to a
+cryptographic address (CA). In addition to providing isolation from other
+memory regions, this allows the unwinder to utilize the CA for additional
+checks during unwinding.
+
+To view a demo of this in operation, run:
+[source,subs=attributes]
+----
+make c3_docker-demo-castack_and_unwind_01
+----
+
+=== LLDB demo
+
+The C3 LLVM includes a C3-aware LLDB debugger, and the C3-kernel can furnish
+coredumps with additional metadata to facilitate debugging of C3-protected
+applications.
+
+To view a demo of this, run:
+[source,subs=attributes]
+----
+make c3_docker-demo-lldb_debug_01
+----
+
+
+== Tests and evaluations
+
+=== Unit tests
+
+The tests are currently configured to use LLVM's libunwind, consequently you
+must use an LLVM checkpoint to run unit tests (e.g., {ckpt_llvm} as described
+above). You may also run with a C3-aware kernel checkpoint (e.g.,
+{ckpt_kernel}), in which case you need to add `--have-kernel`. You can run all
+tests directly with pytest:
+
+[source,subs=attributes]
+----
+# With non-kernel checkpoint:
+pytest -n<NUM_JOBS> -v python_tests --checkpoint {ckpt_llvm} [--model <MODEL>]*
+# With a C3-aware kernel:
+pytest -n<NUM_JOBS> -v python_tests --checkpoint {ckpt_kernel} --have-kernel [--model <MODEL>]*
+----
+
+
+Common options:
+
+[frame=none,grid=none,cols="1,4"]
+|====
+| --checkpoint PATH     | Set the checkpoint to use
+| --model               | Run tests only with the specified model. Can specify multiple models by appending '--model <model_name>' for each model. The '{SIMICS_DEF_MODULE}-integrity' model will run on the {SIMICS_DEF_MODULE} but configure it to use integrity
+| --nomodel             | Exclude specific models from the run. Useful when leaving out `--model` to run all on all default models, but still exclude specific models.
+| -d\|--dist=load       | Load-balance tests.
+| --have-kernel         | Run C3-kernel dependent tests
+|====
+
+
+You can also run individual unit tests. To do so, you will need some additional
+options: `include_folders` to copy the unit test include folder, and 2) add the
+unit_tests include and `-DC3_MODEL define to `gcc_flags`:
 
 [source,subs=attributes]
 ----
 ./simics unit_tests/runtest_common.simics \
-    src_path=unit_tests/common \
-    src_file=gtest_hello.cpp \
-    workload_name=a.out \
-    model={SIMICS_DEF_MODULE} \
     checkpoint={CKPT_LLVM} \
-    include_folders=unit_tests/include/unit_tests \
-    gcc_flags="-g -gdwarf -Werror -ldl -lm -lpthread -pthread -Iinclude -DC3_MODEL={SIMICS_DEF_MODULE}"
+    model={SIMICS_DEF_MODULE} \
+    src_file=unit_tests/common/gtest_hello.cpp
 ----
 
-To run all unit tests:
+
+==== Testing different configurations
+
+To test different configuration (e.g. integrity), the test scripts support
+pseudo models that configure the underlying model in specific ways. Currently
+these models are:
+
+[frame=none,grid=none,cols="1,4"]
+|====
+| {SIMICS_DEF_MODULE}-integrity         | Test C3 integrity.
+| {SIMICS_DEF_MODULE}-integrity-intra   | Test C3 intra-object integrity.
+| {SIMICS_DEF_MODULE}-castack           | Test C3 CAStack.
+| {SIMICS_DEF_MODULE}-nowrap            | Test C3 glibc NOWRAP variant.
+|====
+
+Note that the checks may have dependencies to specific checkpoints (e.g., the
+{SIMICS_DEF_MODULE}-nowrap model requires a nowrap checkpoint). For instance, to
+test C3 integrity, run:
 
 [source,subs=attributes]
 ----
-# Run all unit tests locally on all available models
-pytest -v python_tests/test_unit.py --checkpoint {ckpt_llvm}
-# Run all unit tests for specific models (can specify multiple --model args)
-pytest -v python_tests/test_unit.py --checkpoint {ckpt_llvm} --model {SIMICS_DEF_MODULE}
+pytest -v python_tests/test_unit.py \
+       --checkpoint {ckpt_llvm} \
+       --model {SIMICS_DEF_MODULE}-integrity
 ----
 
+You can also run single modified tests by providing the appropriate commands to
+the test script:
+
+[source,subs=attributes]
+----
+./simics unit_tests/runtest_common.simics \
+    checkpoint={CKPT_LLVM} \
+    model={SIMICS_DEF_MODULE} \
+    enable_integrity=TRUE \
+    src_file=unit_tests/common/gtest_hello.cpp
+----
+
+To enable ICV-based intra-object tripwires, you need to use the C3-enabled
+LLVM/Clang that is included in any checkpoint with the C3 LLVM installed.
+
+[source,subs=attributes]
+----
+# For single unit tests with intra-object integrity:
+./simics unit_tests/runtest_common.simics \
+    checkpoint={CKPT_KERNEL} \
+    model={SIMICS_DEF_MODULE} \
+    enable_integrity=TRUE \
+    compiler="/home/simics/llvm/llvm_install/bin/clang++" \
+    gcc_flags="-fuse-ld=lld -finsert-intraobject-tripwires=all" \
+    src_file=unit_tests/common/gtest_hello.cpp
+
+# For unit tests via pytest:
+pytest -v python_tests/test_unit.py --checkpoint {ckpt_kernel} --have-kernel --model {SIMICS_DEF_MODULE}-integrity-intra
+----
+
+==== Adding new unit tests
+
+The test runner automatically discovers tests in the `unit tests` folder based
+on header labels specified at the top of the file. Starting from the first line,
+all lines starting with `//` are considered part of the test header. Any files
+that contain the label `// model: <enabled_models>` is interpreted as a unit
+test.
+
+An up-to-date list of recognized labels can be found in the
+`python_tests/test_unit.py` file, but some common labels are:
+
+[frame=none,grid=none,cols="1,4"]
+|====
+| model         | Can be * to indicate all models, or a list of specific models.
+| need_kernel   | The test requires the C3-aware kernel.
+| no_kernel     | The test is not compatible with the C3-aware kernel.
+| nomodel       | List of models to exclude from testing.
+| should_fail   | The correct behavior of the test is to fail (i.e., exit with non-zero). This is typical for tests that test detection error conditions such as buffer overflows.
+| cxx_flags     | Additional flags needed when compiling the test.
+| simics_args   | Additional arguments to pass to Simics when running test.
+| xfail         | Mark test as xfail for listed models.
+|====
+
+
+
+=== Juliet
+
+C3 protections have been evaluated using a subset of the Juliet test suite. To
+replicate those results, you can run the following commands.
+
+[source,subs=attributes]
+----
+# Build necessary checkpoints for the Juliet benchmarks (if not already done)
+make cc_kernel
+make c3_docker-ckpt-cc_llvm_1b_ovf
+
+# Baseline for heap vulnerabilities (without C3 protections)
+make c3_docker-demo-juliet-native
+# Baseline for stack vulnerabilities (without C3 protections)
+make c3_docker-demo-juliet-native-stack
+
+# C3-protected heap
+make c3_docker-demo-juliet-c3-heap
+# C3-protected heap with 1b overflow detection
+make c3_docker-demo-juliet-c3-heap-align
+# C3-protected stack
+make c3_docker-demo-juliet-c3-stack
+----
+
+NOTE: To run the juliet-c3-heap-align case, you need to prepare a checkpoint
+with a glibc build that will effectively shift allocations to slightly higher
+addresses if needed so that their ends align with the ends of the granules with
+corresponding initialized Integrity Check Values (ICVs, if enabled), run `make
+c3_docker-ckpt-cc_llvm_1b_ovf`.  This configuration can detect single-byte
+overflows from allocations that would otherwise be followed by padding bytes
+within their last granules that may absorb overflows undetected. However, this
+configuration may be incompatible with certain tests. Note also that even in the
+default configuration that may absorb certain small overflows, those overflows
+would not affect other allocations. Note also that shifting allocations in the
+aforementioned manner results in an equivalent amount of padding bytes being
+added at the beginning of the allocation.
+
+== C3 protected user-space applications
+
+=== Setting up C3 user-space environments
+
+We provide multiple different environments / checkpoints to test different
+aspects of C3. The main environments and build commands are:
+
+[frame=none,grid=none,cols="2,1,3"]
+|===
+| Checkpoint | Build command | Description
+
+| `checkpoints/cc_glibc.ckpt`
+| `make cc_glibc`
+| C3 glibc, using system call shims.
+
+| `checkpoints/cc_llvm.ckpt`
+| `make cc_llvm`
+| C3 glibc and LLVM, using system call shims.
+
+| `checkpoints/cc_kernel.ckpt`
+| `make cc_kernel`
+| C3 glibc, LLVM, and kernel, system calls handle C3 pointers.
+|===
+
+The above commands will automatically build the associated software artifacts
+with the C3 Docker container, and then launch Simics to generate the
+corresponding simulation checkpoint.
+
+You can also build individual software artifacts one-by-one with:
+
+[source,subs=attributes]
+----
+# To build LLVM on host
+make llvm
+
+# To build glibc (without system call shims)
+make glibc
+
+# To build glibc with system call shims
+make glibc-shim
+
+# To build linux
+make linux
+----
+
+If you have all necessary dependencies installed (see
+<<Installing software dependencies>>), you can also build the checkpoints and
+software artifacts locally without Docker by adding the `NO_DOCKER=1` option to
+the make commands, e.g., `make llvm NO_DOCKER=1`.
+
+=== Running workloads
+
+You can run C3 user-space workloads using the `runworkload_common.simics`
+script, which is internally used for various task ranging from running unit
+tests to demos. Some common options are listed below, you can use the Simics
+help command to view all available options with:
+
+[source,subs=attributes]
+----
+./simics
+help scripts/runworkload_common.simics
+----
+
+.Common parameters for runworkload_common.simics
+[frame=none,grid=none,cols="1,4"]
+|====
+|src_file      | Specifies the source or binary to run. (**REQUIRED**)
+|checkpoint    | Specifies the checkpoint. (**REQUIRED**)
+|model         | Selects the C3 model to use. (Note: lim_disp configures the
+LIM model to perform data displacement instead of shifting.) (Default:
+{SIMICS_DEF_MODULE})
+|break_on_exception | If set to 1, will stop simulation on exceptions
+(excluding Page Fault)
+|compiler      | Overrides the compiler for the workload (unless using custom
+build command). To use C3 LLVM, set to
+`/home/simics/llvm/llvm_install/bin/[clang\|clang{plus}{plus}]` (Default:
+`g{plus}{plus}`)
+|debug         | Set to 1 to enable Simics module debug output.
+|disable_cc_env | Suppress the CC_ENABLED=1 flag when running the workload
+                  (i.e., disables C3 heap protections).
+|enable_integrity=TRUE | Enable C3 integrity checking using ICVs.
+|gcc_flags     | Additional compiler flags.
+|====
+
+For example, to run a workload with the {simics_def_module} on the {ckpt_kernel}
+checkpoint, you can use the following commands (assuming you have created the
+checkpoint previously with `make cc_kernel`):
+
+[source,subs=attributes]
+----
+# Enter docker shell (optional if running Simics on host)
+make c3_docker_shell
+
+# To run simple workload (e.g., `microbenchmarks/hello.cpp`):
+./simics scripts/runworkload_common.simics \
+    checkpoint={CKPT_KERNEL} \
+    model={SIMICS_DEF_MODULE} \
+    src_file=microbenchmarks/hello.cpp
+
+# To run pre-compiled binary:
+g++ microbenchmarks/hello.cpp -o a.out
+./simics scripts/runworkload_common.simics \
+    checkpoint={CKPT_KERNEL} \
+    model={SIMICS_DEF_MODULE} \
+    nobuild=TRUE \
+    src_file=a.out
+----
 
 === C3 integrity and intra-object tripwires
 
-The {SIMICS_DEF_MODULE}_model has initial functional support for integrity
-checking.  By default, only writes are integrity checked, see
-<<Using C3 integrity verification>> for more details.
-
-To enable integrity support, you can pass `enable_integrity=1` to the simics
-scripts. The pytest scripts also support two pseudo modules,
-`{SIMICS_DEF_MODULE}-integrity` and `{SIMICS_DEF_MODULE}-integrity-intra`, which
-will run on the {SIMICS_DEF_MODULE}, but will enable module and test
-configuration to exercise C3 integrity checking or C3 integrity checking along
-with compiler-instrumented intra-object tripwires.
+The {SIMICS_DEF_MODULE}_model has functional support for integrity checking. To
+enable integrity support, use the `enable_integrity=TRUE` option:
 
 [source,subs=attributes]
 ----
 # For single workloads with integrity:
 ./simics scripts/runworkload_common.simics \
-    src_path=microbenchmarks \
-    src_file=hello.cpp \
-    workload_name=a.out \
+    checkpoint={CKPT_KERNEL} \
     model={SIMICS_DEF_MODULE} \
-    enable_integrity=1 \
-    checkpoint={CKPT_LLVM} \
-    gcc_flags="-g -gdwarf -Werror -ldl -lm -lpthread -pthread -Iinclude"
+    enable_integrity=TRUE \
+    src_file=microbenchmarks/hello.cpp
 
 # For running pre-compiled binaries with integrity:
 clang++ microbenchmarks/hello.cpp -o a.out
 ./simics scripts/runworkload_common.simics \
-    src_path=. \
-    src_file=a.out \
-    workload_name=a.out \
+    checkpoint={CKPT_KERNEL} \
     model={SIMICS_DEF_MODULE} \
-    checkpoint={CKPT_LLVM} \
+    enable_integrity=TRUE \
     nobuild=TRUE \
-    env_vars="LD_LIBRARY_PATH=/home/simics/glibc/glibc-2.30_install/lib:/home/simics/llvm/llvm_install/lib" \
-    enable_integrity=1
-
-# For single unit tests with integrity:
-./simics unit_tests/runtest_common.simics \
-    src_path=unit_tests/common \
-    src_file=gtest_hello.cpp \
-    workload_name=a.out \
-    model={SIMICS_DEF_MODULE} \
-    enable_integrity=1 \
-    checkpoint={CKPT_LLVM} \
-    include_folders=unit_tests/include/unit_tests \
-    gcc_flags="-g -gdwarf -Werror -ldl -lm -lpthread -pthread -Iinclude -DC3_MODEL={SIMICS_DEF_MODULE}"
-
-# For unit tests via pytest:
-pytest -v python_tests/test_unit.py --checkpoint {ckpt_llvm} --model {SIMICS_DEF_MODULE}-integrity
+    src_file=a.out
 ----
 
 To enable ICV-based intra-object tripwires, you need to use the C3-enabled
@@ -180,32 +526,13 @@ C3-kernel enabled checkpoint with (see <<Custom kernel checkpoint>>):
 
 [source,subs=attributes]
 ----
-# For stand-alone workloads with intra-object integrity:
 ./simics scripts/runworkload_common.simics \
-    src_path=microbenchmarks \
-    src_file=hello.cpp \
-    workload_name=a.out \
-    model={SIMICS_DEF_MODULE} \
-    enable_integrity=1 \
     checkpoint={CKPT_KERNEL} \
-    compiler="/home/simics/llvm/llvm_install/bin/clang++" \
-    gcc_flags="-ldl -lm -lpthread -pthread -fuse-ld=lld -finsert-intraobject-tripwires=all"
-
-# For single unit tests with intra-object integrity:
-./simics unit_tests/runtest_common.simics \
-    src_path=unit_tests/common \
-    src_file=gtest_hello.cpp \
-    workload_name=a.out \
     model={SIMICS_DEF_MODULE} \
-    enable_integrity=1 \
-    checkpoint={CKPT_KERNEL} \
+    enable_integrity=TRUE \
     compiler="/home/simics/llvm/llvm_install/bin/clang++" \
-    include_folders=unit_tests/include/unit_tests \
-    env_vars="LD_LIBRARY_PATH=/home/simics/glibc/glibc-2.30_install/lib:/home/simics/llvm/llvm_install/lib" \
-    gcc_flags="-ldl -lm -lpthread -pthread -fuse-ld=lld -finsert-intraobject-tripwires=all -Iinclude -DC3_MODEL={SIMICS_DEF_MODULE}"
-
-# For unit tests via pytest:
-pytest -v python_tests/test_unit.py --checkpoint {ckpt_kernel} --have-kernel --model {SIMICS_DEF_MODULE}-integrity-intra
+    gcc_flags="-fuse-ld=lld -finsert-intraobject-tripwires=all"
+    src_file=microbenchmarks/hello.cpp
 ----
 
 NOTE: At present, the `-finsert-intraobject-tripwires` option does not support
@@ -213,35 +540,165 @@ multiple parallel compilation jobs. If compiling manually (e.g., not with the
 `runworkload_common.simics` script), make sure to set `-j1` to avoid parallel
 builds.
 
-=== Using Docker
+==== Fine-grained control of integrity
 
-Most builds can be run within Docker to avoid installing all the dependencies
-on the development host system. In general, you can prepend `c3_docker-` to
-any Makefile target in order to run it in Docker instead (the first time will
-build the container and will take some time). For instance:
+The `runworkload_common.simics` script has options for fine-grained control
+of the Simics module behavior on integrity violations:
 
 [source,subs=attributes]
 ----
-# To build checkpoint using Docker image
-make c3_docker-ckpt-cc_kernel
+integrity_fault_on_read_mismatch=TRUE
+integrity_break_on_read_mismatch=TRUE
+integrity_fault_on_write_mismatch=TRUE
+integrity_break_on_write_mismatch=TRUE
 ----
 
-This is equivalent to running:
+These will on launch explicitly configure the C3 Simics module with the the
+corresponding attribute set to true:
+
 [source,subs=attributes]
 ----
-# To enter shell within Docker container
-make c3_docker_shell
-# Then, within container shell, run make
-make ckpt-cc_kernel
+{SIMICS_DEF_MODULE}0_0->integrity_break_on_read_mismatch
+{SIMICS_DEF_MODULE}0_0->integrity_fault_on_read_mismatch
+{SIMICS_DEF_MODULE}0_0->integrity_break_on_write_mismatch
+{SIMICS_DEF_MODULE}0_0->integrity_fault_on_write_mismatch
 ----
 
-Note that Docker is mainly used for builds and output directories are bound
-from the host to the container. So building a checkpoint in or outside Docker
-results in the same output on the host machine (e.g., the above command will
-generate a checkpoint in `{CKPT_KERNEL}`, just as it would if building the
-target without Docker using `make ckpt-cc_kernel`).
+The corresponding configurations may already be set to TRUE by default depending
+on the Simics model itself, particularly the faulting options that control
+whether the corresponding violations should trigger a CPU general protection
+fault within the simulation. However, the `break` attribute configures the
+module to trigger a Simics debugging breakpoint, and are not set and should
+mainly be used for debugging.
 
-=== C3-hardened EDK2
+All software support for resetting and clearing of ICVs is not yet implemented
+(i.e., when a program abnormally terminates, the ICVs for the process' physical
+memory pages may still retain ICVs). In some cases you may want to manually
+reset the ICVs to run multiple workloads in the same Simics session. This can be
+done with the `integrity_icv_reset` attribute that is exposed via a Simics
+module attribute and also within the simulation itself via C3 configurations.
+This resetting functionality is implemented for research and debugging
+purposes and would not be exposed in real deployments.
+
+From the Simics shell, the ICV reset can be triggered with:
+[source,subs=attributes]
+----
+{SIMICS_DEF_MODULE}0_0->integrity_icv_reset = TRUE
+----
+
+From within the simulation, this can be done with:
+[source,subs=attributes]
+----
+#include "malloc/cc_globals.h"
+cc_trigger_icv_map_reset();
+----
+
+=== C3 user-space environment and configuration (optional)
+
+The Makefile targets will automatically build the C3 checkpoints and
+dependencies. But you may want more fine grained control over the build process
+by interacting directly with the different builds. In general, all makefile
+targets can be inspected using the dry-run flag `-n`, and the Simics help
+functionality can show documentation for different simics script options.
+
+==== Shimmed checkpoints
+
+Checkpoints that use a legacy kernel (e.g., {ckpt_llvm}) and use system call
+shims to handle system calls use Clear Linux. To update these, you can use the
+dry-run flag `-n` to view the commands used by the all-in-one makefile target, and
+the Simics help command to view options to the `scripts/update_libs.simics`:
+
+[source,subs=attributes]
+----
+# Check what commands would typically be run:
+make -n cc_llvm NO_DOCKER=1
+
+# View Simics help to see options for update_libs.simics:
+./simics
+simics> help scripts/update_libs.simics
+----
+
+==== Checkpoints with C3-aware kernel
+
+The C3-kernel checkpoints are using a regular Ubuntu 20.04 installation but with
+a custom kernel installed. This assumes you have an initial kernel checkpoint,
+if not, see <<Create initial Ubuntu checkpoint>>. You can again use the dry-run
+flag `-n` and Simics help:
+
+[source,subs=attributes]
+----
+# Check what commands would typically be run:
+make -n cc_kernel NO_DOCKER=1
+
+# View Simics help to see options for update_libs.simics:
+./simics
+simics> help scripts/update_ubuntu_kernel.simics
+----
+
+==== Create initial Ubuntu checkpoint
+
+To set up an Ubuntu checkpoint with a custom kernel, you first need to create a
+base Ubuntu checkpoint. You can generate such a checkpoint using:
+
+[source,subs=attributes]
+----
+./simics -batch-mode scripts/install_ubuntu.simics \
+        save_checkpoint={ckpt_kernel_base}
+----
+
+NOTE: The script automation relies on external services and may fail in
+different environments. In this case, you may need to manually install the
+checkpoint by manually following the steps in `scripts/install_ubuntu.simics`.
+You may also need to change the proxy configuration to suit your environment.
+
+===== Manually building initial Ubuntu checkpoint (optional)
+
+Alternatively, or for troubleshooting, you can also run the Ubuntu installation
+manually in the Simics graphical console. To do this, you need to install Simics
+on your host machine and run Simics directly on the host (i.e., without docker).
+See <<Installing and running Simics on host>>. You do not need to install other
+dependencies and can still use Docker for other builds even if the initial
+checkpoint is generated manually. The saved checkpoint sate should be a at a
+freshly booted Linux shell and the Simics agent started (please consult
+`scripts/update_ubuntu_kernel.simics`).
+
+=== Building LLDB with C3-coredump support
+
+To build LLDB with C3-coredump support run:
+
+[source,subs=attributes]
+----
+make llvm-lldb
+----
+
+This builds `llvm/llvm_install/bin/lldb`. It has C3 support for loading
+variables (and pointers) in C3 cryptographic address format, and will
+automatically read in C3 keys from a coredump file generated by a C3-enabled
+process. This requires that the coredump was generate by the C3-enabled custom
+kernel (e.g., using a cc_kernel checkpoint).
+
+== C3 protected Linux kernel
+
+The C3 protected Linux kernel can be tested using a Buildroot system image. It
+uses the Linux source under `./linux`, but with a kernel configured to enable
+kernel self-protection with C3 and disable C3 user-space support.
+
+[source,subs=attributes]
+----
+# Setup buildroot and prepare Buildroot build
+make c3_docker-linux_buildroot_setup
+make c3_docker-linux_buildroot_prepare
+# Build Buildroot system (may take >1h)
+make c3_docker-linux_buildroot_build
+
+# Run Buildroot system with C3 enabled on Simics
+make c3_docker-linux_buildroot_run
+
+# The  following command also combines all the steps:
+make c3_docker-linux_buildroot
+----
+
+== C3 protected EDK2
 
 To boot up a C3-hardened EDK2 you will need to build EDK2 itself but also build
 a Buildroot filesystem to boot up into. The build targets automatically use
@@ -250,7 +707,7 @@ Docker for most of the builds, and you can build and run with Make:
 [source,subs=attributes]
 ----
 # Checkout EDK2 submodules and build EDK2 in Docker container
-make edk
+make edk2
 # Build the Buildroot system in Docker container
 make edk2_buildroot
 # Run edk2 in Simics with C3 (with some default settings)
@@ -273,23 +730,165 @@ Once built, you can also manually boot EDK2 and configure the system:
 make edk2-buildroot-ssh
 ----
 
+== C3 development environment
 
-== Installing Simics and dependencies
+All the build commands in this document are using a Docker container with
+necessary dependencies installed. For running Simics, you can then alternatively
+either use a host-installed Simics to run the workloads, or use the Simics
+instance installed in the Docker container.
 
-The dependencies and installation is for Ubuntu 20.04. For other systems you may
-have to adapt the instruction here to fit your environment.
+In particular for debugging and using the Simics GUI, you may want
+to install Simics on your development machine. See
+<<Installing and running Simics on host>> for details on how to do that.
 
-=== Clone source code
+=== Proxy configuration
+
+If you need to use proxies, you need to modify the proxy setting in the
+following locations:
+
+- In `scripts/docker/Dockerfile_base`, either before or after the `apt` command;
+  depending on local proxy configurations.
+
+- In `scripts/install_ubuntu.simics`, you may need to configure a proxy for use
+  during Ubuntu installation. After the
+  `$sercon.bp-wait-for-console-string "proxy information"`, add the the
+  following line `$sercon.input "http://<proxy-address:<proxy-port>"` just
+  before the next `$sercon.input "\n"` line.
+
+=== Working with Docker
+
+To facilitate using running either on host or within Docker, the build and
+output directories are bound from the host to the container. So building a
+checkpoint in or outside Docker results in the same output on the host machine.
+See `scripts/make/docker.mk` for the full list of bound directories.
+
+To manually work within Docker, e.g., to run Simics from the container, you can
+run:
 
 [source,subs=attributes]
 ----
-git clone --recurse-submodules {simics-repo-url}
+make c3_docker_shell
 ----
 
-=== Download and install required packages
+Most makefile targets will automatically run within Docker, you can suppress
+this behavior by adding `NO_DOCKER=1` to the makefile run command. This is
+typically implemented by internally prefixing the non-docker Makefile target
+with `c3_docker-`, which automatically spawns the Docker container and runs the
+same make command without the `c3_docker-` prefix. You can always use the
+dry-run `-n` flag to check the commands that would be run by make.
+
+That is, the following three commands are equivalent:
+
+[source,subs=attributes]
+----
+# To automatically build checkpoint in Docker:
+make cc_kernel
+# , or:
+make c3_docker-ckpt-cc_kernel
+# or to manually, enter Docker:
+make c3_docker_shell
+docker> make ckpt-cc_kernel
+----
+
+Both commands will build update the `checkpoints/cc_kerenl.ckpt` checkpoint on
+your host machine and allow it to be used either from within Docker, or from the
+host machine.
+
+NOTE: The Simics module builds are not persistent in the Docker container, so if
+you use the C3 Simics model, you will need to manually build it each time when
+entering the Docker shell. (Build targets that need the Simics model
+automatically do this for you.)
+
+=== Cleaning build artifacts and files
+
+[source,subs=attributes]
+----
+# To clean only Simics modules:
+make clean
+# To clean most build artifacts (e.g., for glibc, llvm, and linux), run:
+make mrproper
+----
+
+Neither of the commands will remove checkpoints. To do so, delete the
+`checkpoints` folder manually. Checkpoints are by default incremental
+and depend on the originating checkpoint, so you want to avoid deleting old
+checkpoint that may have latter dependent checkpoints still in use.
+
+=== Optimizing builds
+
+For frequent re-builds, the build system tries to optimize builds by caching
+intermediate artifacts and use CCache where possible. Specifically, the build
+system will use the following directories for caching:
+
+[source,subs=attributes]
+----
+${HOME}/.c3-buildroot-ccache
+${HOME}/.c3-linux-ccache
+${HOME}/.c3-llvm-ccache
+----
 
 
-==== Install Simics
+The Buildroot systems will when available use a pre-built external toolchain to
+avoid building the whole toolchain during setup. This is stored in
+/opt/simics/buildroot_toolchains and defined in the
+`edk2_src_scripts/edk2_run_linux.sh` script and corresponding Buildroot
+configuration file defined in `edk2_src_scripts/edk2_run_linus.sh`.
+
+
+=== General notes on Simics
+
+You can find Simics documentation at https://simics-download.pdx.intel.com/simics-6/docs/html/.
+
+To run Simics directly, you can use the following command:
+
+[source,subs=attributes]
+----
+./simics [simics_args] <run_script.simics> [run_arg1=val1 run_arg2=val2 ...]
+----
+
+Useful simics_args (optional):
+
+[frame=none,grid=none,cols="1,4"]
+|====
+| --help        | View Simics usage and help.
+| -no-win       | Run simics with GUI windows hidden (can be displayed on demand).
+| -batch-mode   | Run in batch mode (will exit with 0 on success or non-zero on error).
+|====
+
+The Simics shell has support for <TAB> completion, command history, and has very
+helpful `help` and `apropos` commands. In particular, the help command often
+works for complex objects and commands (e.g.,
+`help board.mb.cpu.mem[0][0].examine-memory`).
+
+Some common task you may need are:
+
+----
+# Run and stop simulation (also Ctrl-C)
+run
+stop
+
+# Save or load "checkpoint"
+write-configuration <path>
+read-configuration <path>
+
+# Setting breakpoints
+help bp
+
+# Disassemble code at address (RIP by default)
+disassemble count=20
+
+# Read register and memory values
+read-reg rip
+board.mb.cpu0.mem[0][0].examine-memory (read-reg rip)
+----
+
+=== Working without Docker
+==== Installing and running Simics on host
+
+===== Installing Simics on host
+
+NOTE: The dependencies and installation instruction are tested for Ubuntu 20.04.
+For other systems you may have to adapt the instruction.
 
 
 Download and install Simics v.{simics-pkg-ver} from {simics-public-url}.
@@ -319,7 +918,7 @@ If the addon tab is empty and you encountered a "Unable to load manifest" error
 during installation, you can navigate to the Platforms tab and manually import the
 corresponding manifest file from the installation path.
 
-===== (optional) Install VMP kernel module
+====== (optional) Install VMP kernel module
 
 The Simics VMP kernel module significantly accelerate simulation. But as is, it
 may not be compatible with your system kernel or security requirements (e.g.,
@@ -330,7 +929,7 @@ module signing). If possible, it can be installed with:
 {simics-base}/bin/vmp-kernel-install
 ----
 
-==== Install other dependencies
+===== Install other dependencies
 
 On Ubuntu 20.04, initial dependencies can be installed with:
 
@@ -339,16 +938,20 @@ On Ubuntu 20.04, initial dependencies can be installed with:
 apt install git curl make gcc
 ----
 
-The remaining dependencies can be installed with `make -f config-user.mk
-install_dependencies` (use `make -n` to dry-run, as this will use `sudo`).
+After cloning the C3 repository, you can then install the rest of the
+dependencies with:
 
-Alternatively, you may manually install the following dependencies: bison, curl,
-flex, git, g++-8, libatk1.0-dev, libatk-bridge2.0-dev, libgtk3-dev,
-python-3-pip, pytest, and pytest-xdist.
+[source,subs=attributes]
+----
+#  To directly run (using sudo)
+make install_dependencies
+#  To view commands (e.g., to install manually):
+make -n install_dependencies
+----
 
-==== Install updated cmake
+===== Install updated cmake
 
-To build the LLVM target, the required cmake version is newer than that
+To build the LLVM target, the may require a cmake version is newer than that
 provided by Ubuntu 20.04. To build locally, use:
 
 [source,subs=attributes]
@@ -356,132 +959,93 @@ provided by Ubuntu 20.04. To build locally, use:
 make install-cmake
 ----
 
-== Building and configuring C3 simulator and software
+==== Setting up the C3 Simics environment on host
 
-NOTE: This section, details various build options and configuration for the C3
-simulator. Alternatively, you can follow the <<Quick Start>> to set up.
-
-Most of the configuration, build, and install commands use Makefiles. You can
-use `make -n <target>` to dry-run and view commands make would execute.
-
-
-==== Initialize Simics project files and checkpoint
-
-To initialize the Simics project and build additional dependencies, you can run
-the following commands:
+Once Simics is installed, you configure simics for the current project with:
 
 [source,subs=attributes]
 ----
-#  To install Simics, download additional dependencies, and extract files
-make -f config-user.mk simics_setup
+#  To setup with Simics in /opt/simics/simics-6/simics-latest/bin
+make simics_setup
 
-#  NOTE: If needed, set SIMICS_BIN (default: {simics_bin})
-make -f config-user.mk simics_setup SIMICS_BIN=/some/other/path/bin
+#  or set other SIMICS_BIN directory with
+make simics_setup SIMICS_BIN=/some/other/path/bin
 
-#  Create or update CKPT_GLIBC checkpoint (default: {ckpt_glibc})
-make ckpt-cc_glibc
-
-#  Create or update CKPT_LLVM checkpoint (default: {ckpt_llvm})
+#  Create a new cc_llvm checkpoint with:
 make ckpt-cc_llvm
 
 #  Build Cryptographic Computing Simics modules
 make -B
 ----
 
-Alternatively, you can use the old `./setup_and_build.sh`, or you can use the
-`-n` dry-run flag when running make to inspect commands to run separately.
+==== Building C3 environments without Docker
 
-=== Custom kernel checkpoint
+Most of the build commands for C3 Simics checkpoints, software, or other
+artifacts will automatically use the C3 Docker container. However, if you
+have necessary dependencies installed on your machines, you may be able to
+also build the software without Docker, to do so, add the `NO_DOCKER=1` option
+to the corresponding Make command.
 
-Linux dependencies are installed along with `make install_dependencies`.
-Alternatively, install the following manually: bison, dwarves, flex, libelf-dev,
-libssl-dev, and llvm.
-
-==== Create initial Ubuntu checkpoint
-
-To set up an Ubuntu checkpoint with a custom kernel, you first need to create a
-base Ubuntu checkpoint. You can generate such a checkpoint using:
+For instance:
 
 [source,subs=attributes]
 ----
-./simics -batch-mode scripts/install_ubuntu.simics \
-        save_checkpoint={ckpt_kernel_base}
+# Using Docker, you can create a cc_llvm checkpoint with:
+make cc_llvm
+
+# To build without Docker, you can use any of:
+make cc_llvm NO_DOCKER=1
+make c3_docker-ckpt-cc_llvm NO_DOCKER=1
+make ckpt-cc_llvm
 ----
 
-The scripts by default expect to find the checkpoint at `{ckpt_kernel_base}`,
-override `CKPT_KERNEL_BASE` in `config-local.mk` to use different path.
+NOTE: Builds on the host are not supported or actively tested. They are likely
+to fail on many systems. Please use Docker builds for the most reliable results.
 
-NOTE: The script automation relies on external services and may fail in
-different environments. In this case, you may need to manually install the
-checkpoint by manually following the steps in `scripts/install_ubuntu.simics`.
+== C3 Simics simulation model
 
-For troubleshooting, it is recommended to run with graphical console enabled;
-the initial boot will be in the VGA view, after which GRUB will configure the
-serial console and continue installation via that.
+The C3 functional model is implemented in Simics. It supports various different
+run-time arguments configurable via the Simics shell or scripts. The main
+attributes are:
 
-==== Update kernel
+[frame=none,grid=none,cols="1,4"]
+|====
+| enable_integrity | Enable C3 integrity checking.
+| break_on_exception | Break on exceptions (excluding page faults).
+| cc_context | Access Access C3 configuration.
+| debug | Enable debug printouts for C3 operations.
+|====
 
-This assumes you have an initial kernel checkpoint, if not, see
-<<Create initial Ubuntu checkpoint>>.
-Once you have an initial ubuntu checkpoint (default:
-CKPT_KERNEL_BASE={ckpt_kernel_base}), you can generate a checkpoint with a
-custom kernel using:
-
-[source,subs=attributes]
+You can access these attributes via the Simics shell, e.g., to start debug mode
+you can do
 ----
-# Set CKPT_KERNEL_BASE in config-local.mk if needed, (default: {ckpt_kernel})
-make ckpt-cc_kernel
-----
-
-This will create a new checkpoint at {ckpt_kernel}.GIT_SHA and create/update a
-symlink to it from {ckpt_kernel}.
-
-You can also manually update the kernel of an existing checkpoint with the
-command:
-
-[source,subs=attributes]
-----
-./simics scripts/update_ubuntu_kernel.simics \
-        checkpoint=/path/to/ubuntu_checkpoint_to_build_on.ckpt \
-        upload_llvm=TRUE \
-        upload_glibc=TRUE \
-        kernel=linux/linux.tar.gz \
-        save_checkpoint=checkpoints/new_checkpoint_name.ckpt
+# Read debugging flag
+cc0_0->debug
+# Enable debugging
+cc0_0->debug = TRUE
+# Disable debugging
+cc0_0->debug = FALSE
 ----
 
-This assumes `linux.tar.gz` contains a pre-made linux source within the `src`
-directory of the package. Note, that this is not necessary if using the C3
-packaged configuration and kernel, in which case you can just run `make
-ckpt--cc_kernel` as instructed elsewhere.
+You typically will not access these variables directly but rather use the
+scripts for user-space, Linux, or EDK2 to configure the model.
 
-=== Cleaning build artifacts and files
+=== Simics C3 model source code
 
-[source,subs=attributes]
-----
-# To clean only Simics modules:
-make clean
-# To clean most build artifacts (e.g., for glibc, llvm, and linux), run:
-make mrproper
-----
+The main Simics model code is in the `modules` folder, but the model also uses
+code from the `crypto` and `malloc` folders. In particular the
+`malloc/cc_globals.h` header file is also used by other software artifacts (such
+as the C3 Linux kernel, glibc, and LLVM).
 
-Neither of the commands will remove checkpoints. To do so, delete the
-checkpoints folder(s) manually. Note that checkpoints by default are incremental
-and depend on the originating checkpoint.
-
-=== Building LLDB with C3-coredump support
-
-To build LLDB with C3-coredump support run:
-
-[source,subs=attributes]
-----
-make make_llvm-lldb
-----
-
-This builds `llvm/llvm_install/bin/lldb`. It has C3 support for loading
-variables (and pointers) in C3 cryptographic address format, and will
-automatically read in C3 keys from a coredump file generated by a C3-enabled
-process. This requires that the coredump was generate by the C3-enabled custom
-kernel (e.g., using a cc_kernel checkpoint).
+[frame=none,grid=none,cols="1,4"]
+|====
+| `crypto/ascon.*` | Implementation for Ascon.
+| `crypto/bipbip.*` | Implementation for BipBip.
+| `crypto/sw_encoder.*` | Helper class for C3 pointer and data encoding in software.
+| `malloc/cc_globals.h` | Shared definitions for various C3 functionality.
+| `modules/<model>` | Model-specific Simics implementation.
+| `modules/commmon/ccsimics` | Shared Simics classes and code.
+|====
 
 === Building Doxygen documentation
 
@@ -495,211 +1059,57 @@ annotations in comments in the source code files themselves.
 make documentation
 ----
 
-=== Using C3 integrity verification
 
-The {SIMICS_DEF_MODULE}_model has initial functional support for integrity
-checking based on ICV value bound to a virtual address and corresponding
-expected cryptographic address. By default, only writes are integrity checked,
-but exact behavior can be configured via Simics model attributes:
+== Contributing to the C3-simulator
 
-[source,subs=attributes]
-----
-{SIMICS_DEF_MODULE}0_0->integrity_break_on_write_mismatch = (default: FALSE)
-{SIMICS_DEF_MODULE}0_0->integrity_fault_on_write_mismatch = (default: TRUE)
-{SIMICS_DEF_MODULE}0_0->integrity_break_on_read_mismatch = (default: FALSE)
-{SIMICS_DEF_MODULE}0_0->integrity_fault_on_read_mismatch = (default: FALSE)
-{SIMICS_DEF_MODULE}0_0->integrity_warn_on_read_mismatch = (default: FALSE)
-----
-
-Kernel support for ICV handling is not implemented, hence the virtual-address
-based ICVs of one C3-enabled application may pollute the virtual addresses of
-other C3-enabled applications running within the same simulator instance. At
-present, the ICVs can be programmatically reset in the Simics shell or script
-by:
+To maintain code readability, we use clang-format and cpplint to enforce code
+style and formatting. Please install pre-commit hooks to verify code already
+on commit. To do so, run:
 
 [source,subs=attributes]
 ----
-{SIMICS_DEF_MODULE}0_0->integrity_icv_reset = TRUE
-----
-
-Alternatively, there is a helper function:, `cc_trigger_icv_map_reset`, that can
-be used to trigger ICV reset from within the target (e.g., a program running on
-the simulation). NOTE: this functionality is exposed without access-control
-only for testing purposes.
-
-
-==== (optional) Configure makefile targets
-
-The code listing below assume default paths, but these can be configured by
-creating a `config-local.mk` file or setting the corresponding environment
-variables. Some relevant variables and their default values are:
-
-[source,subs=attributes]
-----
-# The path to Simics installation bin directory
-SIMICS_BIN=${simics_bin}
-
-# Path for a base no-kernel checkpoint that is used as the starting point when
-# generating checkpoints without custom kernel. If not set, new checkpoints will
-# be created from scratch. Default value is ignored if path is not found.
-CKPT_NOKERNEL_BASE={ckpt_nokernel_base}
-
-# Path for checkpoint with glibc, this is generated with `make ckpt-cc_glibc`,
-# and will be a symlink to tagged checkpoint folder.
-CKPT_GLIBC={ckpt_glibc}
-
-Similar to CKPT_GLIBC, but includes llvm.
-CKPT_LLVM={ckpt_llvm}
-----
-
-== Running a workload in Simics
-
-[source,subs=attributes]
-----
-./simics [simics_args] <run_script.simics> [run_arg1=val1 run_arg2=val2 ...]
-----
-
-Useful simics_args (optional):
-
-[frame=none,grid=none,cols="1,4"]
-|====
-| -no-win       | run simics with GUI windows hidden (can be displayed on demand)
-| -batch-mode   | run in batch mode (will exit with 0 on success or non-zero on error)
-|====
-
-
-Most run scripts are based on the generic template scripts/runworkload_common.simics
-It supports the following run-time arguments (see default values in the script):
-
-[frame=none,grid=none,cols="1,4"]
-|====
-|checkpoint    | Specifies the checkpoint.
-|system        | Sets the top level module. For QSP use "board" (default), for
-                 TGL: "tgl"
-|compiler      | Overrides the compiler for the workload (unless using custom build command). Default: g++
-|gcc_flags     | Additional compiler flags
-|model         | Selects the model to run the workload with. Default: cc, or c3. (Note: lim_disp configures the LIM model to perform data displacement instead of shifting.)
-|enable_integrity=1 | Enable C3 integrity checking
-|run_args      | Specifies additional workload run arguments
-|env_vars      | Overrides environment arguments for the workload run command
-|build_cmd     | Overrides the default build command
-|run_cmd       | Overrides the default run command
-|pre_run_fixup | Additional bash commands to execute inside Simics before running the workload
-|debug         | Set to 1 to enable Simics module debug printfs
-|download_bin_path  |If defined, the workload binary and the compiled libc will be downloaded to the specified host directory.
-|disable_meta_check |LIM-only setting. If set to 1, tags and bounds will not
-	                     be evaluated
-|break_on_exception |LIM-only setting. If set to 1, will stop simulation on exceptions (excl. Page Fault)
-|magic         | Set to 1 to enable magic breakpoint
-|mem_profiler  | Set to 1 to enable memory profiler
-|run_cycles=N  | If set, the workload will run for N billion cycles and pause. Default: and stop after completion
-|cache         | Set to 1 to enable caching model
-|exit          | Set to 1 to exit on completion (code 0) or error (non-zero
-                 code)
-|====
-
-Additional run-time arguments for specific scripts:
-spec/scripts/generic.simics:
-
-[frame=none,grid=none,cols="1,4"]
-|====
-|spec          | Specifies the SPEC workload name.
-|spec_size     | Specifies the SPEC experiment size (test/ref)
-|====
-
-
-Useful examples:
-
-[source,subs=attributes]
-----
-./simics scripts/runworkload_common.simics \
-	src_path=microbenchmarks \
-	src_file=hello.cpp \
-	workload_name=a.out \
-	model=cc \
-	checkpoint={CKPT_LLVM} \
-	gcc_flags="-g -gdwarf -Werror -ldl -lm -lpthread -pthread -Iinclude"
-----
-
-== Regression Testing with PyTest:
-
-The tests are currently configured to use LLVM's libunwind, consequently you must
-use an LLVM checkpoint to run unit tests (e.g., {ckpt_llvm} as described above).
-
-Run all tests (12 jobs in parallel):
-
-[source,subs=attributes]
-----
-pytest -n12 -v python_tests --checkpoint {ckpt_llvm} [--model native|cc|lim]
-----
-
-Run only spec tests:
-
-[source,subs=attributes]
-----
-pytest -n12 -v python_tests --checkpoint {ckpt_llvm}[--model native|cc|lim]
-
-# all spec workloads:
-pytest -n12 -v python_tests/test_spec.py --checkpoint {ckpt_llvm}
-
-# specific workloads:
-pytest -n12 -v python_tests/test_spec.py --checkpoint {ckpt_llvm} --spec workload_name [--spec workload_name ...]
-----
-
-Run only unit tests:
-
-[source,subs=attributes]
-----
-pytest -n12 -v python_tests/test_unit.py --checkpoint {ckpt_llvm}
-----
-
-Common options:
-
-[frame=none,grid=none,cols="1,4"]
-|====
-| --checkpoint PATH     | Set the checkpoint to use
-| --model               | Run tests only with the specified model. Can specify multiple models by appending '--model <model_name>' for each model. The '{SIMICS_DEF_MODULE}-integrity' model will run on the {SIMICS_DEF_MODULE} but configure it to use integrity
-| -d                    | Load-balance tests. Shortcut for '--dist=load'
-| --have-kernel         | Run C3-kernel dependent tests
-|====
-
-You can also run individual unit tests:
-
-[source,subs=attributes]
-----
-./simics unit_tests/runtest_common.simics \
-	src_path=unit_tests/common \
-	src_file=gtest_hello.cpp \
-	workload_name=a.out \
-	model=cc \
-	checkpoint={CKPT_LLVM} \
-	include_folders="unit_tests/include/unit_tests" \
-	gcc_flags="-g -gdwarf -Werror -ldl -lm -lpthread -pthread -Iinclude -Iunit_tests/include -DC3_MODEL=cc"
-----
-
-== Misc
-
-=== Pre-commit hooks
-
-To enforce coding guidelines locally, you can install pre-commit hooks that run
-tests on the staged changes before allowing a commit to pass. To enable default
-commit hooks, you can run
-
-[source,subs=attributes]
-----
-#  To install, run:
+# To install, run:
 make pre-commit-install
 #  To uninstall, run:
 make pre-commit-uninstall
 ----
 
-The pre-commit hook will apply whitespace fixes automatically to your working
-tree, you can inspect those changes using `git diff`, and then add them to your
-commit. The pre-commit hook also runs `clang-format` and `cpplint` checks. You
-may need to manually address issues reported by `cpplint`. Cosmetic code style
-changes can be automatically applied by running `clang-format -i <filename>`, or
-without the `-i` flag to only inspect changes without applying them.
+You will also need to install cpplint and clang-format on your development
+machine as those are used by pre-commit.
+
+On commit, pre-commit will automatically run checks configured in
+`.pre-commit-config.yaml`. During the scan, it will only modified files that
+have been staged such that you can afterwards inspect changes using `git diff`.
+You may need to address some issues manually, but simple formatting issues can
+be automatically applied to all staged files using `git clang-format`.
+Alternatively, you can manually apply clang-format on the full file with
+`clang-format -i <filename>`.
+
+A typical workflow is:
+
+[source,subs=attributes]
+----
+# Stage changes
+git commit
+# -> if no errors, commit goes through, otherwise:
+
+# Inspect changes by pre-commit
+git diff
+# If okay, apply
+git add <files>
+
+# Apply clang-format to changed files
+git clang-format
+# Inspect changes by clang-format
+git diff
+# If okay, apply
+git add <files>
+
+git commit
+# If needed, fix remaining issues manually
+----
 
 In some cases you may not be able to fix all changes, or you may need to commit
-files that intentionally violate code style rules. To do so, you can always run
-`git commit --no-verify`. However, when possible, avoid disregarding issues.
+files that intentionally violate code style rules. To do so, you can run `git
+commit --no-verify`. However, when possible, avoid disregarding issues as we may
+begin to enforce these rules on pull-requests.

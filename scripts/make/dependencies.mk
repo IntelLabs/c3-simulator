@@ -1,6 +1,8 @@
+# Copyright 2023-2024 Intel Corporation
+# SPDX-License-Identifier: MIT
 
 # To add dependencies, you can do that in individual makefiles scripts by just
-# adding new install_depencencies_ubuntu tartet like so:
+# adding new install_dependencies_ubuntu targets like so:
 #
 # install_dependencies_ubuntu::
 #     do_something_here...
@@ -33,7 +35,7 @@ install_dependencies_ubuntu::
 
 install_dependencies_unknown::
 	$(info )
-	$(info Cannot detect current environment or install depencencies in it. \
+	$(info Cannot detect current environment or install dependencies in it. \
 	You may need to manually install dependencies. To view the installation \
 	commands that would have been executed on Ubuntu, you can run (where `-n` \
 	specifies dry-run):)

@@ -1,0 +1,30 @@
+log enable lldb c3
+target create a.out --core core
+log disable lldb c3
+#
+#    === Inspect the stack and test stack pointer inference
+#
+reg read rsp
+c3 pointer decode #rsp#
+c3 pointer get_ca #rsp_la#
+
+#
+#    === Inspect str and the original string address
+#
+print str
+print original_str
+#    The bad str address decodes to:
+c3 pointer decode #str#
+#    But the original str address decodes to:
+c3 pointer decode #original_str#
+#
+#    === Seems crash was caused due to overflow of CA power-slot!
+#
+#    === Let's inspect the end variable on the stack
+#
+print &end
+print end
+#
+#    === Looks like the end variable is corrupted!
+#
+quit

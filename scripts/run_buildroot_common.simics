@@ -5,59 +5,103 @@ decl {
     param virtio_rootfs : string
     param kernel_cmdline : string
 
+    param bios : string = ""
+
     param user : string = "root"
     param password : string = "root"
     param prompt : string = "#"
 
     param system : string = "qsp"
 
-    param connect_real_network : int = 0
+    param connect_real_network : bool = FALSE
     param target_ip : string = "10.10.0.100"
 
     param model : string = "c3"
 
     param enable_c3 : int = 0
-    param enable_integrity : int = 0
+    param enable_gsrip : bool = FALSE
     param disable_ptrenc : int = 0
     param disable_data_encryption : int = 0
+    param break_on_exception : int = 0
+    param enable_integrity : int = 0
+    param integrity_break_on_read_mismatch : string = ""
+    ! Set to 1 or 0 to explicitly set
+    param integrity_break_on_write_mismatch : string = ""
+    ! Set to 1 or 0 to explicitly set
+    param integrity_fault_on_read_mismatch : string = ""
+    ! Set to 1 or 0 to explicitly set
+    param integrity_fault_on_write_mismatch : string = ""
+    ! Set to 1 or 0 to explicitly set
+    param integrity_warn_on_read_mismatch : string = ""
+    ! Set to 1 or 0 to explicitly set
+
     param debug_on : int = 0
     param gdb_conn : int = 0
     param gdb_port : int = 9124
-    param pov : int = 0
 
-    param logfile : string = "harden/logs/tim2_cred_hijack.lin"
-    param simlogfile : string = "harden/logs/tim2_cred_hijack.sim"
+    param logfile : string or nil = NIL
+    param default_logfile : string = "logs/run_buildroot_common"
 
-    param do_quit : int = 0
+    param do_run : bool = TRUE
+    ! If FALSE, the script will only set up, but not run the simulation
+    param do_quit : bool = FALSE
+    ! If TRUE, then the main script-branch will explicitly quit after it is done
+
     param magic : int = 0
+
+    param fcmd : string or nil = NIL
+    ! If set, fcmd is forwarded and executed in the Linux shell on boot
+
+    param set_prefix : bool = TRUE
+
+    param login_barrier : int or nil = NIL
+
+    # Return the following variables to calling script
+    result cc : string
+    result sercon : string
+    result logfile : string
 }
 
-if connect_real_network == 1 {
-    (load-target qsp-x86/user-provided-linux
-        machine:software:linux:kernel=$kernel
-        machine:software:linux:virtio_rootfs=$virtio_rootfs
-        machine:software:linux:cmdline=$kernel_cmdline
-        network:service_node:connect_real_network=napt
-        machine:hardware:consoles:gfx_con:show=0)
-} else {
-    (load-target qsp-x86/user-provided-linux
-        machine:software:linux:kernel=$kernel
-        machine:software:linux:virtio_rootfs=$virtio_rootfs
-        machine:software:linux:cmdline=$kernel_cmdline
-        machine:hardware:consoles:gfx_con:show=0)
-}
+if $set_prefix { output-radix 16 }
+
+run-python-file scripts/run_buildroot_common.py
+
+@load_user_provided_linux()
 
 $cpu        = $system.mb.cpu0.core[0][0]
 $graphcon   = $system.console.con
 $sercon     = $system.serconsole.con
 
-$logfile=$logfile + ".ptrenc"+$disable_ptrenc
-$logfile=$logfile + ".int."+$enable_integrity
-$logfile=$logfile+ ".data_enc"+$disable_data_encryption+"."+(date format=file)
+if $logfile == NIL {
+    $logfile = ("%s.%s.%s.%s.%s" %
+                [$default_logfile,
+                 ".ptrenc" + $disable_ptrenc,
+                 ".int." + $enable_integrity,
+                 ".data_enc" + $disable_data_encryption+,
+                 "." + (date format=file)
+               ])
+}
 
-$simlogfile=$simlogfile + ".ptrenc"+$disable_ptrenc
-$simlogfile=$simlogfile + ".int."+$enable_integrity
-$simlogfile=$simlogfile+ ".data_enc"+$disable_data_encryption+"."+(date format=file)
+# Loads the C3 model and sets $cc, then configures:
+#   disable_ptrenc
+#   disable_data_encryption
+#   break_on_exception
+#   enable_gsrip
+#   enable_integrity
+#   integrity_break_on_read_mismatch
+#   integrity_break_on_write_mismatch
+#   integrity_fault_on_read_mismatch
+#   integrity_fault_on_write_mismatch
+#   integrity_warn_on_read_mismatch
+@enable_c3()
+
+if (debug_on == 1) {
+    $cc->debug = TRUE
+}
+
+if $magic != 0 {
+    bp.magic.break $magic
+}
 
 #$sercon.bp-break-console-string "Starting network"
 script-branch {
@@ -67,56 +111,16 @@ script-branch {
     disable-jit
     disable-vmp
 
-    #connect qsp.mb.sb.eth_slot ethernet_switch.device1
-    if $enable_c3 == 1 {
-        if $model == "cc" {
-            $cc = (new-cc-model -connect-all)
-        } else if $model == "c3" {
-            $cc = (new-c3-model -connect-all)
-        } else {
-            echo "Unknown model '%s'" % [$model]
-        }
-        if $enable_integrity == 1 {
-            $cc->enable_integrity = TRUE
-            $cc->integrity_break_on_write_mismatch = TRUE
-            $cc->integrity_fault_on_write_mismatch = FALSE
-            $cc->integrity_break_on_read_mismatch = FALSE
-        }
-
-        if $disable_ptrenc == 1 {
-            echo "----------------------------------------"
-            echo "| !!! CC pointer encoding disabled !!! |"
-            echo "----------------------------------------"
-            $cc->cc_isa_ptrenc = FALSE
-        }
-
-        if $disable_data_encryption == 1 {
-            echo "---------------------------------------"
-            echo "| !!! CC data encryption disabled !!! |"
-            echo "---------------------------------------"
-            $cc->disable_data_encryption = TRUE
-        }
-
-        if $debug_on == 1 {
-            $cc->debug_on = TRUE
-        }
-    }
-
-    $system.serconsole.con.capture-start -overwrite "%s.serconsole.txt" % $logfile
-    start-command-line-capture $simlogfile
-
-    run
+    $system.serconsole.con.capture-start -overwrite "%s.grub.serconsole.txt" % $logfile
+    start-command-line-capture -overwrite "%s.grub.commandline.txt" % $logfile
 
     if $gdb_conn == 1 {
         $sercon.bp-wait-for-console-string "Externally Configured Linux"
-        stop
-
-        if $disable_ptrenc == 1 {
-            new-gdb-remote port=$gdb_port
-        } else {
-            new-gdb-remote port=$gdb_port
-        }
+        new-gdb-remote port=$gdb_port
     }
+
+    enable-real-time-mode
+    run
 
     $sercon.bp-wait-for-console-string "buildroot login: "
     $sercon.input "%s\n" % [$user]
@@ -124,26 +128,39 @@ script-branch {
     $sercon.bp-wait-for-console-string "Password:"
     $sercon.input "%s\n" % [$password]
 
+    echo ("=== Logged in as %s:%s, waiting for prompt (%s)" %
+          [$user, $password, $prompt])
     $sercon.bp-wait-for-console-string ("%s " % [$prompt])
 
-    echo "Logged in as %s:%s" % [$user, $password]
-
-    if $enable_integrity == 1 {
-        $cc->integrity_break_on_read_mismatch = TRUE
-    }
-
-    enable-real-time-mode
+    echo "=== Login successful"
 
     stop
-    if ($connect_real_network) {
+    if $connect_real_network {
+        echo "=== Connecting to real network"
         connect-real-network target-ip = $target_ip
     }
+
     run
     bp.time.wait-for $cpu 5
 
+    if $fcmd != NIL {
+        $sercon.input "%s\n" % [$fcmd]
+        $sercon.bp-wait-for-console-string ("%s " % [$prompt])
+    }
+
     stop
 
-    if ($do_quit == 1) {
+    if $login_barrier != NIL {
+        # Signal the caller script that we've reached the Linux shell
+        wait-for-script-barrier $login_barrier
+    }
+
+    if $do_quit {
+        echo "=== Quitting (do_quit is TRUE)"
         exit
     }
+}
+
+if $do_run == TRUE {
+    run
 }

@@ -1,3 +1,5 @@
+# Copyright 2023-2024 Intel Corporation
+# SPDX-License-Identifier: MIT
 
 .PHONY: documentation
 documentation: doxygen-docs

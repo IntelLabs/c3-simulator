@@ -1,7 +1,5 @@
-/*
- Copyright Intel Corporation
- SPDX-License-Identifier: MIT
-*/
+// Copyright 2023-2024 Intel Corporation
+// SPDX-License-Identifier: MIT
 
 #ifndef MODULES_COMMON_CCSIMICS_SHADOW_RIP_H_
 #define MODULES_COMMON_CCSIMICS_SHADOW_RIP_H_
@@ -15,8 +13,8 @@ extern "C" {
 #include "ccsimics/simics_connection.h"
 #include "ccsimics/simics_util.h"
 #include "ccsimics/xed_util.h"
-#include "crypto/cc_encoding.h"
-#include "malloc/cc_globals.h"
+#include "c3/crypto/cc_encoding.h"
+#include "c3/malloc/cc_globals.h"
 
 #ifndef SLOT_SIZE_IN_BITS
 #define SLOT_SIZE_IN_BITS 3
@@ -43,8 +41,8 @@ namespace ccsimics {
  * cc_context and Context. The state also includes an enable bit for control.
  *
  * Addresses for memory accesses are not directly modified, instead, a separate
- * address_before callback is epxected to trigger shadow-rip replacement if the
- * instruciton decode callback has marked the instruction as rip-relative in
+ * address_before callback is expected to trigger shadow-rip replacement if the
+ * instruction decode callback has marked the instruction as rip-relative in
  * this cycle. Note that the is_rip_rel_ bit must be reset externally as the
  * instruction decode callback is ran only for matching opcodes!
  *
@@ -569,7 +567,7 @@ inline int ShadowRip<CcTy, ConTy, CtxTy>::instruction_decode(
         return 0;
     }
 
-    // Type ot pass both *this and xedd to decode callback
+    // Type to pass both *this and xedd to decode callback
 
     const auto instr_cls = xed_decoded_inst_get_iclass(&xedd);
     const auto instr_cat = xed_decoded_inst_get_category(&xedd);
@@ -634,7 +632,7 @@ ShadowRip<CcTy, ConTy, CtxTy>::emul_lea(xed_decoded_inst_t *xedd) {
         return CPU_Emulation_Default_Semantics;
     }
 
-    // XED_OPERAND_OUTREG dosen't seem to work here!?!
+    // XED_OPERAND_OUTREG doesn't seem to work here!?!
     auto dst_xed_reg = xed_decoded_inst_get_reg(xedd, XED_OPERAND_REG0);
     auto dst_reg = convert_xed_reg_to_simics(dst_xed_reg);
     if (dst_reg == X86_Reg_Id_Not_Used) {
@@ -644,7 +642,7 @@ ShadowRip<CcTy, ConTy, CtxTy>::emul_lea(xed_decoded_inst_t *xedd) {
     if (dbg() && get_shadow_rip() != 0) {
         dbgprint("%-25s 0x%016lx", "gsrip is ", get_shadow_rip());
         dbgprint("%-25s 0x%016lx", "rip is ", con_->read_rip());
-        dbgprint("Chaning output reg %s", convert_reg_to_string(dst_reg));
+        dbgprint("Changing output reg %s", convert_reg_to_string(dst_reg));
         dbgprint("%-25s 0x%016lx", "to ", new_dst_val);
     }
 
@@ -841,7 +839,7 @@ inline bool ShadowRip<CcTy, ConTy, CtxTy>::update_mem_branch_target(
                 // However, because the actual memory is C3 protected and we
                 // here replace it with a plaintext call target, we will
                 // potentially get an ICV violation. So, let's disable integrity
-                // for the duration fo the call.
+                // for the duration of the call.
                 ifdbgprint(dbg(), "disable integrity for duration of call");
                 mem_call_integrity_hack_ = ctx_->get_icv_enabled();
                 ctx_->set_icv_enabled(false);

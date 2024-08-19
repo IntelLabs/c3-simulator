@@ -1,3 +1,6 @@
+// Copyright 2024 Intel Corporation
+// SPDX-License-Identifier: MIT
+
 // model: *
 #include <assert.h>
 #include <ctype.h>
@@ -82,6 +85,8 @@ TEST(STRING, mallocwcsnlen) {
     srand(SRAND_SEED);
     wchar_t *buff, *str_offset;
     size_t max_length = 128;
+    // Full test relocated to wcstring_test_slow.cpp
+    max_length = 48;
     for (size_t alloc_length = 1; alloc_length <= max_length; alloc_length++) {
         buff = (wchar_t *)malloc(sizeof(wchar_t) * (alloc_length + 17));
         for (int offset = 0; offset < 16; offset++) {
@@ -128,6 +133,8 @@ TEST(STRING, mallocwcscpy) {
     srand(SRAND_SEED);
     wchar_t *buff, *str_offset, *str;
     size_t max_length = 128;
+    // Full test relocated to wcstring_test_slow.cpp
+    max_length = 48;
     for (size_t alloc_length = 2; alloc_length < max_length; alloc_length++) {
         buff = (wchar_t *)malloc(sizeof(wchar_t) * (alloc_length + 17));
         for (int offset = 0; offset < 16; offset++) {
@@ -240,6 +247,8 @@ TEST(STRING, mallocwcscat) {
     srand(SRAND_SEED);
     wchar_t *buff, *str_offset, *str1, *str2;
     size_t max_length = 128;
+    // Full test relocated to wcstring_test_slow.cpp
+    max_length = 48;
     for (size_t alloc_length = 2; alloc_length < max_length; alloc_length++) {
         buff = (wchar_t *)malloc(sizeof(wchar_t) * (alloc_length + 17));
         for (int offset = 0; offset < 16; offset++) {
@@ -307,6 +316,8 @@ TEST(STRING, mallocwcsncat) {
     srand(SRAND_SEED);
     wchar_t *buff, *str_offset, *str1, *str2;
     size_t max_length = 128;
+    // Full test relocated to wcstring_test_slow.cpp
+    max_length = 48;
     for (size_t alloc_length = 2; alloc_length < max_length; alloc_length++) {
         buff = (wchar_t *)malloc(sizeof(wchar_t) * (alloc_length + 17));
         for (int offset = 0; offset < 16; offset++) {
@@ -373,6 +384,8 @@ TEST(STRING, mallocwcscmp) {
     srand(SRAND_SEED);
     wchar_t *buff, *str_offset, *str;
     size_t max_length = 128;
+    // Full test relocated to wcstring_test_slow.cpp
+    max_length = 48;
     for (size_t alloc_length = 2; alloc_length < max_length; alloc_length++) {
         buff = (wchar_t *)malloc(sizeof(wchar_t) * (alloc_length + 17));
         for (int offset = 0; offset < 16; offset++) {
@@ -428,6 +441,8 @@ TEST(STRING, mallocwcsncmp) {
     srand(SRAND_SEED);
     wchar_t *buff, *str_offset, *str;
     size_t max_length = 128;
+    // Full test relocated to wcstring_test_slow.cpp
+    max_length = 48;
     for (size_t alloc_length = 10; alloc_length < max_length; alloc_length++) {
         buff = (wchar_t *)malloc(sizeof(wchar_t) * (alloc_length + 17));
         for (int offset = 0; offset < 16; offset++) {

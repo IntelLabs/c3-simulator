@@ -1,13 +1,25 @@
-# Common LIM GTEST script
-
-if not defined gcc_flags {
-    $gcc_flags = "-g -lgtest -pthread "
-} else {
-    $gcc_flags += " -g -lgtest -pthread "
+# Copyright 2024 Intel Corporation
+# SPDX-License-Identifier: MIT
+decl {
+    params from "%simics%/scripts/runworkload_common.simics"
+        default gcc_flags = "-lgtest -pthread -Iinclude"
+        default include_folders = "unit_tests/include/unit_tests"
+        default run_args = "--gtest_break_on_failure"
+        default wrap_flags = "-Werror"
 }
-if not defined run_args { $run_args = "" }
-$run_args +=" --gtest_break_on_failure "
-if not defined wrap_flags { $wrap_flags = "" }
-$wrap_flags += " -Werror"
+
+# Helper func to append string if it isn't found in simics variable var
+@def check_append(var, add):
+    if not add in simenv[var]:
+        simenv[var] += f' {add}'
+
+# Add options we always need for unit tests
+@check_append("gcc_flags", f'-DC3_MODEL={simenv.model}')
+@check_append("gcc_flags", "-lgtest")
+@check_append("gcc_flags", "-pthread")
+@check_append("gcc_flags", "-Iinclude")
+@check_append("wrap_flags", "-Werror")
+@check_append("run_args", "--gtest_break_on_failure")
+@check_append("include_folders", "unit_tests/include/unit_tests")
 
 run-command-file (lookup-file "%simics%/scripts/runworkload_common.simics")

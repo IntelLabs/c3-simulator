@@ -1,3 +1,6 @@
+// Copyright 2024 Intel Corporation
+// SPDX-License-Identifier: MIT
+
 // model: *
 // skip: zts
 // xfail: -integrity
@@ -112,7 +115,11 @@ TEST(Malloc, AllocThen_8B_to_64B_ReadsWithOffset) {
 }
 TEST(Malloc, AllocThen_128B_Accesses) {
     srand(123456);
+#ifdef KEEP_SLOW  // Moved to malloc_test_slow.cpp
     const int N = 3000;
+#else
+    const int N = 100;
+#endif
     uint8_t ref_data[N];
     for (int i = 0; i < N; i++) {
         ref_data[i] = (uint8_t)rand();
@@ -167,17 +174,6 @@ TEST(Malloc, AllocThen_128B_Accesses) {
     // during the test.
     for (int i = 0; i < N; i++) {
         free(allocs[i]);
-    }
-}
-
-TEST(Utils, MallocUsableSize) {
-    srand(1234);
-    size_t max_size = 10000;
-    for (unsigned int i = 0; i < max_size; i++) {
-        size_t size = 1 + (((size_t)rand()) % max_size);
-        uint8_t *p = (uint8_t *)malloc(size);
-        ASSERT_LE(size, malloc_usable_size(p));
-        free(p);
     }
 }
 

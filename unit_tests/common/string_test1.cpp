@@ -1,3 +1,6 @@
+// Copyright 2024 Intel Corporation
+// SPDX-License-Identifier: MIT
+
 // model: *
 #include <assert.h>
 #include <ctype.h>
@@ -15,7 +18,7 @@ void fill_string(char *str, size_t size) {
             str[i] = '!' + i % ('~' - '!');  // pick any ascii between ! and ~
         }
     }
-    str[size] = '\0';
+    str[size - 1] = '\0';
 }
 
 void fill_numbers(char *str, size_t size) {
@@ -24,7 +27,7 @@ void fill_numbers(char *str, size_t size) {
             str[i] = '0' + i % ('9' - '0');
         }
     }
-    str[size] = '\0';
+    str[size - 1] = '\0';
 }
 
 void fill_randomnumbers(char *str, size_t size) {
@@ -33,7 +36,7 @@ void fill_randomnumbers(char *str, size_t size) {
             str[i] = '0' + rand() % ('9' - '0');
         }
     }
-    str[size] = '\0';
+    str[size - 1] = '\0';
 }
 
 void fill_randomalphabets(char *str, size_t size) {
@@ -42,7 +45,7 @@ void fill_randomalphabets(char *str, size_t size) {
             str[i] = 'a' + rand() % ('z' - 'a');
         }
     }
-    str[size] = '\0';
+    str[size - 1] = '\0';
 }
 
 void fill_randomstring(char *str, size_t size) {
@@ -51,7 +54,7 @@ void fill_randomstring(char *str, size_t size) {
             str[i] = '*' + rand() % ('z' - '*');
         }
     }
-    str[size] = '\0';
+    str[size - 1] = '\0';
 }
 
 TEST(STRING, strchr) {
@@ -75,7 +78,7 @@ TEST(STRING, mallocstrrchr) {
             str_offset = buff + offset;
             for (size_t length_expected = 1; length_expected < alloc_length;
                  length_expected++, ch++) {
-                fill_string(str_offset, length_expected);
+                fill_string(str_offset, length_expected + 1);
                 ASSERT_NE(strrchr(str_offset, ch), nullptr);
                 if (ch == '|') {
                     ch = '!';
@@ -228,10 +231,15 @@ TEST(STRING, mallocstrchrnul1randomsize) {
 TEST(STRING, mallocstrpbrk) {
     char *buff, *str_offset, *keys;
     size_t max_length = 128;
+#ifdef KEEP_SLOW  // Moved to string_test1_slow.cpp
+    const size_t max_offset = 16;
+#else
+    const size_t max_offset = 9;
+#endif
     size_t length_expected;
     for (size_t alloc_length = 5; alloc_length <= max_length; alloc_length++) {
         buff = (char *)malloc(sizeof(char) * (max_length + 17));
-        for (int offset = 0; offset < 16; offset++) {
+        for (int offset = 0; offset < max_offset; offset++) {
             str_offset = buff + offset;
             for (length_expected = 3; length_expected < alloc_length;
                  length_expected++) {
@@ -268,7 +276,11 @@ TEST(STRING, mallocstrpbrkrandomsize) {
 TEST(STRING, mallocstrspn) {
     srand(SRAND_SEED);
     char *buff, *str_offset, *str, *str1;
+#ifdef KEEP_SLOW  // Moved to string_test1_slow.cpp
     size_t max_length = 128;
+#else
+    size_t max_length = 64;
+#endif
     for (size_t alloc_length = 3; alloc_length < max_length; alloc_length++) {
         buff = (char *)malloc(sizeof(char) * (alloc_length + 17));
         for (int offset = 0; offset < 16; offset++) {
@@ -277,19 +289,19 @@ TEST(STRING, mallocstrspn) {
                  length_expected++) {
                 str = (char *)malloc(sizeof(char) * (length_expected + 1));
                 if (length_expected >= 10) {
-                    fill_randomnumbers(str_offset, length_expected);
+                    fill_randomnumbers(str_offset, length_expected + 1);
                     str1 = str_offset + length_expected;
-                    fill_string(str1, alloc_length - length_expected);
-                    fill_numbers(str, length_expected);
+                    fill_string(str1, alloc_length - length_expected + 1);
+                    fill_numbers(str, length_expected + 1);
                 } else {
-                    fill_string(str_offset, alloc_length);
-                    fill_string(str, length_expected);
+                    fill_string(str_offset, alloc_length + 1);
+                    fill_string(str, length_expected + 1);
                 }
                 ASSERT_EQ(strspn(str_offset, str), length_expected);
                 free(str);
-                fill_string(str_offset, alloc_length);
+                fill_string(str_offset, alloc_length + 1);
                 str = (char *)malloc(sizeof(char) * (length_expected + 1));
-                fill_randomstring(str, length_expected);
+                fill_randomstring(str, length_expected + 1);
                 ASSERT_EQ(strspn(str_offset, str), 0);
                 free(str);
             }
@@ -306,9 +318,9 @@ TEST(STRING, mallocstrspnrandomsize) {
     for (size_t i = 1; i <= 100; i++) {
         alloc_length = rand() % max_length + 17;
         int offset = rand() % 16;
-        buff = (char *)malloc(sizeof(char) * (alloc_length + offset + 1));
+        buff = (char *)malloc(sizeof(char) * (alloc_length + offset));
         str_offset = buff + offset;
-        str = (char *)malloc(sizeof(char) * (alloc_length + 1));
+        str = (char *)malloc(sizeof(char) * (alloc_length));
         if (alloc_length >= 10) {
             fill_randomnumbers(str_offset, alloc_length);
             fill_numbers(str, alloc_length);
@@ -316,7 +328,7 @@ TEST(STRING, mallocstrspnrandomsize) {
             fill_string(str_offset, alloc_length);
             fill_string(str, alloc_length);
         }
-        ASSERT_EQ(strspn(str_offset, str), alloc_length);
+        ASSERT_EQ(strspn(str_offset, str), (alloc_length - 1));
         free(str);
         fill_string(str_offset, alloc_length);
         str = (char *)malloc(sizeof(char) * (alloc_length + 1));
@@ -330,7 +342,11 @@ TEST(STRING, mallocstrspnrandomsize) {
 TEST(STRING, mallocstrcspn) {
     srand(SRAND_SEED);
     char *buff, *str_offset, *str, *str1;
+#ifdef KEEP_SLOW  // Moved to string_test1_slow.cpp
     size_t max_length = 128;
+#else
+    size_t max_length = 64;
+#endif
     for (size_t alloc_length = 1; alloc_length <= max_length; alloc_length++) {
         buff = (char *)malloc(sizeof(char) * (alloc_length + 17));
         for (int offset = 0; offset < 16; offset++) {
@@ -341,12 +357,12 @@ TEST(STRING, mallocstrcspn) {
                 str1 = str_offset + length_expected;
                 fill_numbers(str1, alloc_length - length_expected);
                 str = (char *)malloc(sizeof(char) * (length_expected + 1));
-                fill_numbers(str, length_expected);
-                ASSERT_EQ(strcspn(str_offset, str), length_expected);
+                fill_numbers(str, length_expected + 1);
+                ASSERT_EQ(strcspn(str_offset, str), length_expected - 1);
                 free(str);
                 str = (char *)malloc(sizeof(char) * (length_expected + 1));
                 fill_string(str_offset, alloc_length);
-                fill_string(str, length_expected);
+                fill_string(str, length_expected + 1);
                 ASSERT_EQ(strcspn(str_offset, str), 0);
                 free(str);
             }
@@ -367,8 +383,8 @@ TEST(STRING, mallocstrcspnrandomsize) {
         str_offset = buff + offset;
         fill_randomalphabets(str_offset, alloc_length);
         str = (char *)malloc(sizeof(char) * (alloc_length + 1));
-        fill_randomnumbers(str, alloc_length);
-        ASSERT_EQ(strcspn(str_offset, str), alloc_length);
+        fill_randomnumbers(str, alloc_length + 1);
+        ASSERT_EQ(strcspn(str_offset, str), alloc_length - 1);
         free(str);
         str = (char *)malloc(sizeof(char) * (alloc_length + 1));
         fill_string(str_offset, alloc_length);

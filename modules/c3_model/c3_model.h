@@ -1,7 +1,6 @@
-/*
- Copyright 2016 Intel Corporation
- SPDX-License-Identifier: MIT
-*/
+// Copyright 2016-2024 Intel Corporation
+// SPDX-License-Identifier: MIT
+
 #ifndef MODULES_C3_MODEL_C3_MODEL_H_
 #define MODULES_C3_MODEL_C3_MODEL_H_
 
@@ -20,7 +19,6 @@ extern "C" {
 #include "ccsimics/rep_movsb_tripwire.h"
 #include "ccsimics/simics_util.h"
 #include "ccsimics/stack_hardening.h"
-
 
 namespace ccsimics {
 
@@ -95,7 +93,7 @@ class C3Model : public C3BaseModel<ConTy, CtxTy, PtrEncTy> {
     }
 
     inline void
-    set_integrity_supress_mode(enum ccsimics::INTEGRITY_SUPPRESS_MODE mode) {
+    set_integrity_suppress_mode(enum ccsimics::INTEGRITY_SUPPRESS_MODE mode) {
         integrity_->set_suppress_icv_mode(mode);
     }
 

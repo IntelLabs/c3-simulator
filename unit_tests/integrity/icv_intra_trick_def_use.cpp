@@ -1,6 +1,9 @@
+// Copyright 2024 Intel Corporation
+// SPDX-License-Identifier: MIT
+
 // model: *
-// nomodel: zts -castack -zts
-// simics_args: enable_integrity=1
+// nomodel: zts -castack -zts -nowrap
+// simics_args: enable_integrity=TRUE
 
 #include <gtest/gtest.h>
 #include "malloc/cc_globals.h"

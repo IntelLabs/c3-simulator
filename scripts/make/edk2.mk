@@ -1,7 +1,7 @@
-# Copyright 2023 Intel Corporation
+# Copyright 2023-2024 Intel Corporation
 # SPDX-License-Identifier: MIT
 
-edk2-%::
+edk2-%:: $(project_dir)/logs
 	+ env $(SUB_ENV_FLAGS) $(MAKE) -C $(project_dir)/edk2_src $(MAKEFLAG_N) $*
 
 .PHONY: edk2
@@ -19,7 +19,8 @@ edk2_all: edk2 edk2_buildroot
 
 .PHONY: edk2_run
 edk2_run:
-	$(MAKE) $(MAKEFLAG_N) edk2-buildroot-run
+	$(MAKE)
+	$(MAKE) $(MAKEFLAG_N) edk2-buildroot-run-and-quit
 
 .PHONY: mrproper
 mrproper:: edk2-mrproper

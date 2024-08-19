@@ -1,3 +1,6 @@
+# Copyright 2021-2024 Intel Corporation
+# SPDX-License-Identifier: MIT
+
 import pytest
 import os
 import re
@@ -5,6 +8,8 @@ import sys
 from python_tests.common import SimicsInstance, lim_models, stack_models, \
                                 heap_models, default_models
 
+# Debug the c3_test_case class
+DEBUG_C3_TEST_CASE = False
 DEBUG_TEST_RUNNER = False
 
 TEST_HEADER_TRUE_VALUES = [ "yes", "Yes", "true", 1 ]
@@ -34,10 +39,12 @@ cxx_flags
     Configure additional CXX_FLAGS
 simics_args
     Additional Simics options needed for test
+slow
+    If set to yes, then the test is skipped when running with --skip-slow
 """
 TEST_HEADER_LABELS = ["envp", "ld_flags", "should_fail", "cxx_flags", "model",
                       "nomodel", "xfail", "need_libunwind", "need_kernel",
-                      "no_kernel", "simics_args"]
+                      "no_kernel", "simics_args", "slow"]
 
 gtest_script 			= "unit_tests/runtest_common.simics"
 generic_script          = "scripts/runworkload_common.simics"
@@ -66,11 +73,21 @@ class c3_test_case:
     def __str__(self):
         return self.filename
 
+    def dbgprint(*args):
+        if DEBUG_C3_TEST_CASE:
+            print(*args, file=sys.stderr)
+
     def get_basename(self):
         return os.path.basename(self.filename)
 
     def get_dirname(self):
         return os.path.dirname(self.filename)
+
+    def get_folder_config(self):
+        file = os.path.join(os.path.dirname(self.filename), "_test_unit.conf")
+        if os.path.exists(file):
+            return file
+        return None
 
     def read_label(self, line, label):
         m = re.match(r"//\s+" + re.escape(label) + r":\s*(.*)$", line)
@@ -106,12 +123,12 @@ class c3_test_case:
 
     def has_model(self, label, model):
         assert label in TEST_HEADER_LABELS, f"Unknown label: {label}"
-        dbgprint(f"=== ==== Looking for {model} in {label}")
+        self.dbgprint(f"=== ==== Looking for {model} in {label}")
         if not label in self.header:
             return False
         str = self.get(label)
 
-        dbgprint(f"=== ==== {label} value is: {str}")
+        self.dbgprint(f"=== ==== {label} value is: {str}")
 
         r = (r".*[\s|,]?\s*" + re.escape(model) + r"\s*(?:[\s|,].*)?$")
         if re.match(r, str):
@@ -140,22 +157,32 @@ class c3_test_case:
 
         return False
 
-    def read_test_header(self):
-        dbgprint(f"Called this one")
-        f = open(self.filename, "r")
+    def read(self):
+        self.dbgprint(f"self.read() called")
+        folder_config = self.get_folder_config()
+        if folder_config:
+            self.read_test_header(folder_config)
+        self.read_test_header(self.filename)
+
+    def read_test_header(self, filename):
+        self.dbgprint(f"self.read_test({filename}) called")
+        f = open(filename, "r")
 
         found_header = False
         for line in f.readlines():
             line = line.rstrip()
-            dbgprint(f"=== Reading: {line}")
+            self.dbgprint(f"=== Reading: {line}")
 
-            # Skip unti we find first consecutive block of // comments, and
+            # Skip until we find first consecutive block of // comments, and
             # stop reading after block ends
             if re.match("^//", line):
-                dbgprint("=== >>> Found header section start")
+                self.dbgprint("=== >>> Found header section start")
                 found_header = True
+            elif re.match('^\s*$', line):
+                self.dbgprint("===     Ignoring empty line")
+                continue;
             elif found_header:
-                dbgprint("=== <<< Found header section end")
+                self.dbgprint("=== <<< Found header section end")
                 break
             elif not found_header:
                 continue
@@ -164,14 +191,17 @@ class c3_test_case:
             found = False
             for label in TEST_HEADER_LABELS:
                 found = self.read_label(line, label)
-                dbgprint(f"=== Checking for {label}")
+                self.dbgprint(f"=== Checking for {label}")
                 if found != None:
-                    dbgprint(f"=== Checking for {label}")
-                    dbgprint(f"===              {label} <- {found}")
-                    self.header[label] = found
+                    self.dbgprint(f"=== Checking for {label}")
+                    self.dbgprint(f"===              {label} <- {found}")
+                    if label in self.header:
+                        self.header[label] = f"{self.header[label]} {found}"
+                    else:
+                        self.header[label] = found
                     break
             if not found:
-                dbgprint(f"Unrecognized line: {line}")
+                self.dbgprint(f"Unrecognized line: {line}")
 
         f.close()
 
@@ -180,7 +210,7 @@ def skip_slow(request):
     return request.config.getoption("--skip-slow")
 
 def has_libunwind(request):
-    return not request.config.getoption("--zts-default-unwinder")
+    return request.config.getoption("--libunwind")
 
 def has_kernel(request):
     return request.config.getoption("--have-kernel")
@@ -238,11 +268,16 @@ def get_should_fail(request, testcase, model):
     return testcase.get_and_append("should_fail", "")
 
 def get_cxx_flags(request, testcase, model):
-    cxx_flags = testcase.get_and_append("cxx_flags", " ".join([
-            "-DC3_MODEL={}".format(model),
-            "-Iinclude" ]))
+    # Add some common flags
+    cxx_flags = [ "-DC3_MODEL={}".format(model), "-Iinclude" ]
     if has_libunwind(request):
-        cxx_flags = " ".join([ cxx_flags, "-ldl -pthread" ])
+        cxx_flags.append("-ldl -pthread")
+
+    # Add explicitly requested flags
+    cxx_flags.extend(request.config.getoption("--cxxflags"))
+
+    # Get the test-specific flags, and make cxx_flags a string
+    cxx_flags = testcase.get_and_append("cxx_flags", " ".join(cxx_flags))
 
     # add cxx flags for the intra-obj model
     # only if they were not already specified in testcase headers
@@ -269,10 +304,9 @@ def do_skip(request, testcase, model):
         return True
 
     # If --skip-slow, then skip tests listed in slow_test
-    if skip_slow(request):
-        if any(t for t in slow_tests if t == os.path.basename(testcase.filename)):
-            pytest.skip(f"skipping {testcase}, slow test")
-            return True
+    if skip_slow(request) and testcase.get_bool("slow", False):
+        pytest.skip(f"skipping {testcase}, marked as slow test")
+        return True
 
     # Skip if need but don't have kernel
     if not has_kernel(request) and testcase.get_bool("need_kernel", False):
@@ -292,7 +326,7 @@ def do_skip(request, testcase, model):
     # Skip if explicitly excluded
     for l in get_model_match_list(model):
         if testcase.has_model("nomodel", l):
-            pytest.skip(f"skipping {testcase}, test explicitly disabled for {model}")
+            pytest.skip(f"skipping {testcase}, test explicitly disabled for {l} (⊆ {model})")
             return True
 
     # Intra-object tests currently require kernel checkpoint
@@ -313,7 +347,7 @@ def module_dir(model):
     base_model = model.split("-", 1)[0]
     return "modules/{}_model".format(base_model)
 
-def parametrize_model(metafunc):
+def get_active_models(metafunc):
     models = [ ]
 
     if metafunc.config.getoption("model"):
@@ -332,14 +366,12 @@ def parametrize_model(metafunc):
             lambda m: not len(set(get_model_match_list(m)).intersection(set(nomodel))),
             models)
 
-    metafunc.parametrize("model", models)
+    return models
 
 testfiles = {}
 
 def pytest_generate_tests(metafunc):
     self_test()
-
-    all_src_files = []
 
     # Scan through all the source files under src_path
     for root, dirs, files in os.walk(src_path):
@@ -347,20 +379,22 @@ def pytest_generate_tests(metafunc):
             if file.endswith(".cpp"):
                 filename = os.path.join(root, file)
                 testcase = c3_test_case(filename)
-                testcase.read_test_header()
+                testcase.read()
                 # Just include files that include any model
                 if testcase.get("model") != None:
-                    all_src_files.append(testcase.filename)
                     testfiles[testcase.filename] = testcase
 
+    dbgprint(f"Found {len(testfiles.keys())} test testfiles")
+
     if "src_file" in metafunc.fixturenames:
-        metafunc.parametrize("src_file", all_src_files)
+        metafunc.parametrize("src_file", testfiles.keys())
     if "model" in metafunc.fixturenames:
-        parametrize_model(metafunc)
+        metafunc.parametrize("model", get_active_models(metafunc))
 
 def test_rungtest(checkpoint, src_file, model, request):
     testcase = testfiles[src_file]
     # Do skip or xfail if needed
+    dbgprint(f">>>>> Model: {model}, Testcase: {testcase}")
     if not do_skip(request, testcase, model):
         do_xfail(testcase, model)
 
@@ -368,21 +402,18 @@ def test_rungtest(checkpoint, src_file, model, request):
     src_dirname = testcase.get_dirname()
 
     other_args = [
-        "workload_name=" + src_basename + ".o",
+        "workload_name=" + testcase.get_basename() + ".o",
         "obj_files=\"" + get_obj_files(request, testcase, model) + "\"",
         "env_vars=\"" + get_env_vars(request, testcase, model) + "\"",
         "ld_flags=\"" + get_ld_flags(request, testcase, model) + "\"",
         "gcc_flags=\"" + get_cxx_flags(request, testcase, model) + "\"",
-        "include_folders=\"unit_tests/include/unit_tests\"",
+        "include_folders=\"unit_tests/include/unit_tests c3lib/c3\"",
     ]
 
     if request.config.getoption("--no-upload"):
         other_args.append("no_upload=TRUE")
-    else:
-        other_args.extend([
-            "src_file=" + src_basename,
-            "src_path=" + src_dirname
-        ])
+
+    other_args.append("src_file=" + testcase.filename)
 
     other_args.extend(testcase.get_split("simics_args", " "))
 
@@ -391,17 +422,17 @@ def test_rungtest(checkpoint, src_file, model, request):
     if model.endswith("-castack"):
         model = model.replace('-castack', '')
         if not "enable_cc_castack=1" in other_args:
-            other_args.append("enable_cc_castack=1")
+            other_args.append("enable_cc_castack=TRUE")
 
     if model.endswith("-integrity"):
         model = model.replace('-integrity', '')
-        if not "enable_integrity=1" in other_args:
-            other_args.append("enable_integrity=1")
+        if not "enable_integrity=TRUE" in other_args:
+            other_args.append("enable_integrity=TRUE")
 
     if model.endswith("-integrity-intra"):
         model = model.replace('-integrity-intra', '')
-        if not "enable_integrity=1" in other_args:
-            other_args.append("enable_integrity=1")
+        if not "enable_integrity=TRUE" in other_args:
+            other_args.append("enable_integrity=TRUE")
 
         # always add compiler
         other_args.append("compiler=/home/simics/llvm/llvm_install/bin/clang++")
@@ -409,18 +440,19 @@ def test_rungtest(checkpoint, src_file, model, request):
     if model.endswith("-nowrap"):
         model = model.replace('-nowrap', '')
         if not "enable_cc_nowrap=1" in other_args:
-            other_args.append("enable_cc_nowrap=1")
+            other_args.append("enable_cc_nowrap=TRUE")
+            other_args.append("disable_cc_env=TRUE")
 
     if model == "lim-trace":
         model = "lim_disp"
-        other_args.append("trace_only=1")
+        other_args.append("trace_only=TRUE")
 
     other_args.extend(get_unwind_args(request))
 
     other_args.append(get_include_file(testcase.filename))
 
     if request.config.getoption("--upload-glibc"):
-        other_args.append("upload_glibc=1")
+        other_args.append("upload_glibc=TRUE")
 
     test_inst = SimicsInstance(gtest_script, checkpoint, model, other_args)
     proc = test_inst.run(request)

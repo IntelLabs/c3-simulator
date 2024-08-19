@@ -1,3 +1,6 @@
+// Copyright 2024 Intel Corporation
+// SPDX-License-Identifier: MIT
+
 // model: cc
 // nomodel: cc-tripwire
 // no_kernel: yes
@@ -17,7 +20,7 @@
 #define asm_lea_0x10(offset, res)                                              \
     do {                                                                       \
         asm volatile("lea " #offset "(%%rip), %[_res]\n\t;"                    \
-                     : [ _res ] "+r"(res)                                      \
+                     : [_res] "+r"(res)                                        \
                      :                                                         \
                      :);                                                       \
     } while (0)
@@ -59,7 +62,7 @@ TEST(ShadowRip, detect_lea) {
         set_cpu_shadow_rip_enabled(false);
     }
 
-    // Expect equal ciphertext bits after GSRIP subsitution by RIP-relative LEA
+    // Expect equal ciphertext bits after GSRIP substitution by RIP-relative LEA
     ASSERT_EQ(get_ciphertext(gsrip), get_ciphertext(ptr));
 
     // dbgprint("After  0x%016lx", (uint64_t)ptr);

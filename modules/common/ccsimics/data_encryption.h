@@ -1,14 +1,13 @@
-/*
- Copyright 2016 Intel Corporation
- SPDX-License-Identifier: MIT
-*/
+// Copyright 2016-2024 Intel Corporation
+// SPDX-License-Identifier: MIT
+
 #ifndef MODULES_COMMON_CCSIMICS_DATA_ENCRYPTION_H_
 #define MODULES_COMMON_CCSIMICS_DATA_ENCRYPTION_H_
 
 #include <simics/model-iface/cpu-instrumentation.h>
 #include "ccsimics/simics_util.h"
-#include "crypto/ascon_cipher.h"
-#include "crypto/cc_encoding.h"
+#include "c3/crypto/ascon_cipher.h"
+#include "c3/crypto/cc_encoding.h"
 
 static inline cpu_bytes_t encrypt_decrypt_bytes(ptr_metadata_t *metadata,
                                                 logical_address_t la_encoded,

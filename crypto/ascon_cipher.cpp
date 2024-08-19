@@ -1,7 +1,6 @@
-/*
- Copyright 2023 Intel Corporation
- SPDX-License-Identifier: MIT
-*/
+// Copyright 2023-2024 Intel Corporation
+// SPDX-License-Identifier: MIT
+
 #include "ascon_cipher.h"  // NOLINT
 #include <stdint.h>
 

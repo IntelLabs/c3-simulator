@@ -1,3 +1,6 @@
+// Copyright 2024 Intel Corporation
+// SPDX-License-Identifier: MIT
+
 // model: *
 // nomodel: lim -integrity
 // xfail: zts -castack -zts
@@ -45,7 +48,7 @@ TEST(TCLASS, test_key_configuration) {
         plaintext_buff[i] = buff[i];
     }
 
-    // Resotre original C3 context
+    // Restore original C3 context
     cc_load_context(&old_ctx);
 
     MAGIC(0);

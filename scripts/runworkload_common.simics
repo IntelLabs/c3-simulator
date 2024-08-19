@@ -1,118 +1,290 @@
-# Common LIM run script
+# Copyright 2024 Intel Corporation
+# SPDX-License-Identifier: MIT
+decl {
+    param checkpoint : string
+    ! The checkpoint to load for running the workload.
 
-@def check_mandatory_vars(vars):
-	for v in vars.split():
-		if not v in simenv:
-			print("Error: variable " + v + " not defined. Exiting.")
-			run_command("exit")
+    param build_cmd : string or nil = NIL
+    ! Specify alternate command for building the workload.
+
+    param run_cmd : string or nil = NIL
+    ! Specify alternate command for running the workload.
+
+    param src_file : string or nil = NIL
+    ! The source file to compile and run within the Simulation
+
+    param obj_files : string or nil = NIL
+    ! Overrides the object files to link / build when compiling workload.
+
+    param include_file : string or nil = NIL
+    ! Additional include files to copy to the simulation and include when
+    ! compiling the workload.
+
+    param include_folders : string or nil = NIL
+    ! Additional folders to copy over to /home/simics/include before running
+    ! the workload.
+
+    param src_path : string or nil = NIL
+    ! Optional specifier for the path to src_file. If not set, then this is
+    ! automatically inferred from the src_file parameter
+
+    param workload_name : string = "a.out"
+    ! Set the filename of the workload binary. May be necessary when uploading
+    ! a prebuilt binary with different name but also controls the name of the
+    ! output binary when compiling binary in the simulation.
+
+    param system : string = "board"
+    ! Sets the top level target. For QSP use "board" (default), for TGL: "tgl".
+
+    param model : string = "c3"
+    ! The C3 Simics model to use
+
+    param exit : bool = FALSE
+	! Should this script explicitly exit on completion.
+
+    param nobuild : bool = FALSE
+    ! Set to disable building the workload in the simulation. Assumes that the
+    ! workload binary is supplied via the src_file parameter.
+
+    param no_upload : bool = FALSE
+    ! Do not upload any binaries or source files, assume they are already
+    ! present on checkpoint (e.g., for unit testing).
+
+    param compiler : string = "g++"
+    ! The compiler to use to compile the workload. Used, for instance, to build
+    ! workloads using the C3 LLVM under /home/simics/llvm/llvm_install (if
+    ! installed on checkpoint).
+
+    param gcc_flags : string = "-Iinclude"
+    ! Additional compiler flags to pass to the compiler driver when building the
+    ! workload.
+    param ld_flags : string = ""
+    ! Additional linker flags to pass to the compiler when building the
+    ! workload.
+
+    param instr_hist : bool = FALSE
+    param lim_no_meta : bool = FALSE
+    param lit : bool = FALSE
+    param data_disp : bool = FALSE
+    param trace_only : bool = FALSE
+    param wrap : bool = FALSE
+    param wrap_flags : string = ""
+    param custom_start_workload : string or nil = NIL
+
+    param pre_run_fixup : string or nil = NIL
+    ! Additional commands to execute inside Simics before running the workload.
+
+    param mem_profiler : bool = FALSE
+    ! Set to true to enable memory profiles
+
+    param cache : bool = FALSE
+    ! Set to TRUE to enable caching model.
+    param cache_stat_file : string or nil = NIL
+
+    param disable_meta_check : bool = FALSE
+    ! LIM-only setting. If set to 1, tags and bounds will not be evaluated
+
+    param post_run_cmd : string or nil = NIL
+    ! Additional command to run after the workload has finished.
+
+    param run_cycles : int or nil = NIL
+    ! Run the simulation for run_cycles billion cycles.
+
+    param magic : bool = FALSE
+    ! Enable Simics magic breakpoints.
+
+    param break_on_exception : bool = FALSE
+    ! Trigger Simics breakpoint on exceptions.
+
+    param break_on_decode_fault : bool = FALSE
+    ! Trigger Simics breakpoint on instruction decoding fault.
+
+    param disable_encryption : bool = FALSE
+    ! Disable C3 data encryption
+
+    param enable_coredumps : bool = FALSE
+    ! Enable core dumps in the simulation (ulimit -c unlimited).
+
+    param run_args : string = ""
+    ! Additional arguments to pass to the workload when running it.
+
+    param bin_path : string = "/home/simics"
+    ! Path to where the workload_name executable is found.
+
+    param unwinder : {"default_unwinder", "llvm_libunwind"} = "default_unwinder"
+    ! Set to llvm_unwinder to use the C3-aware LLVM libunwind library.
+
+    param debug : bool = FALSE
+    ! Enable debug_on for the C3 Simics model.
+
+    param download_bin_path : string or nil = NIL
+    ! If set, the libc.so and workload binary will be copied from the simulation
+    ! to the download_bin_path on the host.
+
+    param glibc_debug : bool = FALSE
+    ! If set, will set the CC_DEBUG_PRINT=1 environment flag when running the
+    ! workload.
+
+    param disable_cc_env : bool = FALSE
+    ! Set to disable the CC_ENABLED=1 environment flag. The flag controls
+    ! if the glibc heap allocator will use C3 to protect heap allocations and
+    ! is set by default.
+
+    param env_vars : string = ""
+    ! Additional environment variables to set when running workload in the
+    ! simulation.
+
+    param llvm_lib_files : string or nil = NIL
+    ! Additional files to copy from llvm_lib_src into the simulation. May be
+    ! used to rapidly prototype LLVM library changes without updating the full
+    ! Simics checkpoint.
+    param llvm_lib_src : string or nil = NIL
+    ! The source directory on the host for copying llvm_lib_files.
+    param llvm_lib_dst : string or nil = NIL
+    ! The destination directory in the simulation for copying llvm_lib_files.
+
+    param upload_libunwind : bool = FALSE
+    ! If TRUE, libunwind.so.1 and libunwind.so.1.0 form llvm/llvm_install/lib
+    ! will be uploaded to the ! /home/simics/llvm/llvm_install/lib folder in the
+    ! simulation. (e.g. for testing new libunwind version without rebuilding
+    ! full checkpoint).
+
+    param upload_glibc : bool = FALSE
+    ! If TRUE, copy the C3-dependent glibc libraries from the glibc host install
+    ! folder into the simulation. Does not copy the full glibc, but can be used
+    ! to test allocator changes without rebuilding checkpoint.
+
+    param guest_llvm_lib : string = "/home/simics/llvm/llvm_install/lib"
+    ! Path to the C3 LLVM installation path within the simulation.
+    param guest_glibc_install : string = "/home/simics/glibc/glibc-2.30_install"
+    ! Path to the C3 Glibc installation path within the simulation.
+    param guest_lib64_dir : string = "/usr/lib64"
+    ! Path to the system lib64 directory within the simulation.
+
+    param glibc_version : string = "2.30"
+    ! The version of glibc to use.
+
+    param log : bool = FALSE
+    ! If set to true, capture a commandline log in the logs folder.
+
+    param enable_cc_castack : bool = FALSE
+    ! Enable the C3 CAStack stack hardening by configuring the C3 model and
+    ! environmental flags appropriately.
+
+    param enable_cc_nowrap : bool = FALSE
+    ! Enable the NOWRAP Glibc flags when running the workload.
+
+    param enable_integrity : bool = FALSE
+    ! Enable C3 integrity, if supported by model.
+
+    param integrity_break_on_read_mismatch : bool or nil = NIL
+    ! If set, a Simics breakpoint will trigger on read ICV fail.
+    param integrity_break_on_write_mismatch : bool or nil = NIL
+    ! If set, a Simics breakpoint will trigger on write ICV fail.
+    param integrity_fault_on_read_mismatch : bool or nil = NIL
+    ! Controls whether the C3 model should raise an exception of read ICV fail.
+    param integrity_fault_on_write_mismatch : bool or nil = NIL
+    ! Controls whether the C3 model should raise an exception of false ICV fail.
+
+    param upload_c3_headers : bool = FALSE
+    ! If set, will upload the C3 malloc headers to the /home/simics/include
+    ! folder in the simulation.
+
+    param experiment : int or nil = NIL
+    ! Extra experiment identifier to append to logfile names (e.g., when
+    ! logging multiple runs of same workload with different C3 setup).
+
+}
 
 run-python-file scripts/init.py
-$default_model = "c3"
-
-# by default environment gives CA to (malloc) memory objects
-# set disable_cc_env=1 to disable LA to CA encoding in the environment
-# other values still enable CC_ENV
-if not defined disable_cc_env { $disable_cc_env= 0 }
 
 @cmd_to_shell("hostname")
 
-if not defined exit { $exit = 0 }
-
-
-
-@check_mandatory_vars("workload_name")
-
-if defined llvm_lib_files {
-	@check_mandatory_vars("llvm_lib_src llvm_lib_dst")
+if $src_path == NIL {
+    @simenv.src_path = os.path.dirname(simenv.src_file)
+    @simenv.src_file = os.path.basename(simenv.src_file)
 }
 
-$guest_llvm_lib = "/home/simics/llvm/llvm_install/lib"
-$guest_glibc_install = "/home/simics/glibc/glibc-2.30_install"
 $guest_glibc_lib = ("%s/lib" % [$guest_glibc_install])
-if not defined glibc_version { $glibc_version = "2.30" }
-if $glibc_version == "2.36" {
-	$libc = "libc.so.6"
-	$libpthread = "libpthread.so.0"
-	$glibc_ld = "ld-linux-x86-64.so.2"
-} else {
-	$libc = "libc-%s.so" % [$glibc_version]
-	$libpthread = "libpthread-%s.so" % [$glibc_version]
-	$glibc_ld = "ld-%s.so" % [$glibc_version]
-}
-if not defined guest_lib64_dir { $guest_lib64_dir = "/usr/lib64" }
 
-if not defined checkpoint { $checkpoint = "checkpoints/cc_glibc.ckpt"}
+if $glibc_version == "2.36" {
+    $libc = "libc.so.6"
+    $libpthread = "libpthread.so.0"
+    $glibc_ld = "ld-linux-x86-64.so.2"
+} else {
+    $libc = "libc-%s.so" % [$glibc_version]
+    $libpthread = "libpthread-%s.so" % [$glibc_version]
+    $glibc_ld = "ld-%s.so" % [$glibc_version]
+}
+
 echo "Using checkpoint: " + $checkpoint
-if not defined system { $system = "board" }
-if not defined nobuild { $nobuild = FALSE }
-if not defined compiler { $compiler = "g++"}
-if not defined gcc_flags { $gcc_flags = ""}
-if not defined ld_flags { $ld_flags = "" }
-if defined wrap { $gcc_flags = "-Wall -Wl,--wrap,malloc -Wl,--wrap,calloc -Wl,--wrap,realloc -Wl,--wrap,free " + $gcc_flags}
-if not defined wrap_flags { $wrap_flags = "" }
-if not defined run_args { $run_args = "" }
-if not defined model { $model = $default_model }
-if not defined enable_integrity { $enable_integrity = FALSE }
-if not defined no_upload { $no_upload = FALSE }
-if not defined enable_cc_castack { $enable_cc_castack = FALSE }
-if not defined upload_c3_headers { $upload_c3_headers = FALSE }
-if not defined enable_cc_nowrap { $enable_cc_nowrap = FALSE }
 
 # Store this for log file
 $model_conf = $model
 
 $cc_model_type = FALSE
-if $model == "cc" or $model == "c3" {
-	$cc_model_type = TRUE
-}
+if $model == "c3" { $cc_model_type = TRUE }
 
 
+
+# Configure C3 environment flags, and initialize with empty string if unset
 if $cc_model_type {
-	if $disable_cc_env != 1 {
-		@append_env_var("CC_ENABLED=1") # environment return CA by default
-		if $enable_integrity == TRUE {
-			@append_env_var("CC_ICV_ENABLED=1")
-			$model_conf = $model_conf + "+icv"
-		}
-	} else {
-		@append_env_var("")             # initialize env_var
-	}
-	if $enable_cc_castack {
-		$env_vars = $env_vars + " CASTACK_ENABLED=1"
-		$model_conf = $model_conf + "+castack"
-	}
-	if $enable_cc_nowrap {
-		$env_vars = $env_vars + " CC_NO_WRAP_ENABLED=1"
-		$model_conf = $model_conf + "+nowrap"
-	}
+    if not $disable_cc_env {
+        @append_env_var("CC_ENABLED=1")
+        if $enable_integrity {
+            @append_env_var("CC_ICV_ENABLED=1")
+            $model_conf = $model_conf + "+icv"
+        }
+    }
+    if $enable_cc_castack {
+        @append_env_var("CASTACK_ENABLED=1")
+        $model_conf = $model_conf + "+castack"
+    }
+    if $enable_cc_nowrap {
+        @append_env_var("CC_NO_WRAP_ENABLED=1")
+        $model_conf = $model_conf + "+nowrap"
+    }
+
+
+
 } else if $model == "lim" {
-	# If data_disp is already defined, that means the environment variables were already set
-	# by some other script that includes this one. It is important to not overwrite those
-	# settings, since the model variable gets set to lim in the lim_disp branch, which would
-	# result in incorrect environment variable settings here.
-	if not defined data_disp {
+    # If data_disp is already defined, that means the environment variables were
+    # already set by some other script that includes this one. It is important
+    # to not overwrite those settings, since the model variable gets set to lim
+    # in the lim_disp branch, which would result in incorrect environment
+    # variable settings here.
+    if not $data_disp {
         @append_env_var("LIM_ENABLED=1")
-		if defined lim_no_meta {
-			@append_env_var("LIM_NO_META=1")
-		}
-		if defined trace_only { $env_vars = $env_vars + " TRACE_ONLY=1"}
-	}
+        if $lim_no_meta {
+            @append_env_var("LIM_NO_META=1")
+        }
+        if $trace_only {
+            @append_env_var("TRACE_ONLY=1")
+        }
+    }
 } else if $model == "lim_disp" {
     @append_env_var("LIM_ENABLED=1 LIM_DATA_DISP=1")
-	if defined trace_only { $env_vars = $env_vars + " TRACE_ONLY=1" }
-	$model = "lim" # The handling after this point is identical once the environment variables are set.
-	$data_disp = 1
+    if $trace_only {
+        @append_env_var("TRACE_ONLY=1")
+    }
+    # The handling after this point is identical once the environment variables
+    # are set.
+    $model = "lim"
+    $data_disp = 1
 } else if $model == "native" {
-	if not defined env_vars { $env_vars = "" }
+    @append_env_var("")
 } else {
     echo "ERROR: need to specify valid model. Exiting"
     exit 1
 }
 
 
-if defined glibc_debug {
-	@append_env_var("CC_DEBUG_PRINT=1")
+@append_env_var("LD_LIBRARY_PATH=/home/simics/glibc/glibc-2.30_install/lib")
+
+if $glibc_debug {
+    @append_env_var("CC_DEBUG_PRINT=1")
 }
+
 read-configuration $checkpoint
 $system.console.con.hide
 if $system == "tgl" {
@@ -126,269 +298,277 @@ $start_time=0
 $start_cycle=0
 $end_time=0
 
-if not defined unwinder { $unwinder="default_unwinder" }
+$model_conf = $model_conf + "+" + $unwinder
 
-if defined log {
+if $log {
     !mkdir -p logs
-	$logfile = "logs/%s" % [$workload_name]
-	if defined experiment { $logfile = $logfile + "." + $experiment }
-	$logfile = $logfile + "_" + $model_conf
-	if $unwinder != "default_unwinder" { $logfile = $logfile + "_" + $unwinder }
-	$logfile = $logfile + "_" + (date format=file)
+    $logfile = "logs/%s" % [$workload_name]
+    if $experiment != NIL { $logfile = $logfile + "." + $experiment }
+    $logfile = $logfile + "_" + $model_conf + (date format=file)
 
-	start-command-line-capture $logfile
-	list-variables
+    start-command-line-capture $logfile
+    list-variables
 }
 
-if not defined bin_path { $bin_path = "/home/simics"}
-
 $branch_id = (script-branch "workload" {
-	# Send in a newline to trigger a prompt
-	$con.input "cd\n"
-    #$con.wait-then-write "$ " "echo Starting simulation now! \n"
-    #add-session-comment "command echo issued"
-	# run for one/tenth second to give the hardware time to update
-	bp.time.wait-for $cpu 0.1
+    # Send in a newline to trigger a prompt
+    $con.input "cd\n"
+    # run for one/tenth second to give the hardware time to update
+    bp.time.wait-for $cpu 0.1
 
-	###############################
-	#     Upload Source files     #
-	###############################
+    ###############################
+    #     Upload Source files     #
+    ###############################
     echo "Transferring source files to target... This will take a few seconds..."
     echo "  Calling start-agent-manager"
     start-agent-manager
     echo "  Calling agent_manager.connect-to-agent"
-	agent_manager.connect-to-agent
-	if defined llvm_lib_files {
-		echo "  Copying LLVM lib files %s" % [$llvm_lib_files]
-		@copy_many_files(simenv.llvm_lib_files, simenv.llvm_lib_src, simenv.llvm_lib_dst)
-	}
-	if (defined src_file) and (not $no_upload) {
-		local $src_full_path = (lookup-file "%simics%/"+ $src_path + "/" + $src_file)
-		echo "  Copying src file %s to /home/simics" % [$src_full_path]
-		matic0.upload $src_full_path "/home/simics/"
-		matic0.wait-for-job
-	}
+    $matic = (agent_manager.connect-to-agent)
 
-	if (defined include_file) and (not $no_upload) {
-		if $include_file != "" {
-			echo "  Copying include file: '%s'" % [$include_file]
-			@copy_many_files(simenv.include_file, simenv.src_path)
-		}
-	}
-	if (defined include_folders) and (not $no_upload) {  # add to command line include_folders="folderlist"
-		@copy_include_folders(simenv.include_folders)
-	}
+    if $llvm_lib_files != NIL {
+        @check_vars_defined("llvm_lib_src llvm_lib_dst")
+        echo "  Copying LLVM lib files %s" % [$llvm_lib_files]
+        @copy_many_files(simenv.llvm_lib_files, simenv.llvm_lib_src, simenv.llvm_lib_dst)
+    }
+    if ($src_file != NIL) and (not $no_upload) {
+        local $src_full_path = (lookup-file "%simics%/"+ $src_path + "/" + $src_file)
+        echo "  Copying src file %s to /home/simics" % [$src_full_path]
+        $matic.upload $src_full_path "/home/simics/"
+        $matic.wait-for-job
+    }
 
-	if $upload_c3_headers {
-		# these folders are copied by default
-		@command_to_console("rm -rf malloc crypto")
-		@copy_include_folders("malloc")
-		@copy_include_folders("crypto")
-		@command_to_console("ln -s include/malloc/cc_malloc.c")
-		@command_to_console("ln -s include/malloc/cc_globals.h")
-		@command_to_console("ln -s include/malloc/utils.h")
-	} else if (not $no_upload) {
-		if $cc_model_type {
-			echo "  Copying malloc files"
-			matic0.upload (lookup-file "%simics%/malloc/cc_malloc.c") "/home/simics/"
-			matic0.upload (lookup-file "%simics%/malloc/cc_globals.h") "/home/simics/"
-			matic0.upload (lookup-file "%simics%/malloc/utils.h") "/home/simics/"
-			matic0.wait-for-job
-		} else if $model == "lim" {
-			matic0.upload (lookup-file "%simics%/malloc/lim_ptr_encoding.h") "/home/simics/"
-			matic0.wait-for-job
-		}
-	}
+    if ($include_file != NIL) and (not $no_upload) {
+        if $include_file != "" {
+            echo "  Copying include file: '%s'" % [$include_file]
+            @copy_many_files(simenv.include_file, simenv.src_path)
+        }
+    }
+    if ($include_folders != NIL) and (not $no_upload) {  # add to command line include_folders="folderlist"
+        @copy_include_folders(simenv.include_folders)
+    }
 
-	if defined upload_libunwind {
-		(matic0.upload
-			(lookup-file "%simics%/llvm/llvm_install/lib/x86_64-unknown-linux-gnu/libunwind.so.1")
-			"/home/simics/llvm/llvm_install/lib/x86_64-unknown-linux-gnu/")
-		(matic0.upload
-			(lookup-file "%simics%/llvm/llvm_install/lib/x86_64-unknown-linux-gnu/libunwind.so.1.0")
-			"/home/simics/llvm/llvm_install/lib/x86_64-unknown-linux-gnu/")
-		matic0.wait-for-job
-	}
+    if $upload_c3_headers {
+        # these folders are copied by default
+        @command_to_console("rm -rf malloc crypto")
+        @copy_include_folders("malloc")
+        @copy_include_folders("crypto")
+        @command_to_console("ln -s include/malloc/cc_malloc.c")
+        @command_to_console("ln -s include/malloc/cc_globals.h")
+        @command_to_console("ln -s include/malloc/utils.h")
+    } else if (not $no_upload) {
+        if $cc_model_type {
+            echo "  Copying malloc files"
+            matic0.upload (lookup-file "%simics%/malloc/cc_malloc.c") "/home/simics/"
+            matic0.upload (lookup-file "%simics%/malloc/cc_globals.h") "/home/simics/"
+            matic0.upload (lookup-file "%simics%/malloc/utils.h") "/home/simics/"
+            matic0.wait-for-job
+        } else if $model == "lim" {
+            matic0.upload (lookup-file "%simics%/malloc/lim_ptr_encoding.h") "/home/simics/"
+            matic0.wait-for-job
+        }
+    }
 
-	if defined upload_glibc {
-		echo "  Copying %s %s %s" % [$libc, $libpthread, $glibc_ld]
-		$src = "%simics%/glibc/glibc-2.30_install/lib"
-		$dst = ("%s/" % [$guest_glibc_lib])
-		matic0.upload (lookup-file "%s/%s" % [$src, $libc]) $dst
-		matic0.upload (lookup-file "%s/%s" % [$src, $libpthread]) $dst
-		matic0.upload (lookup-file "%s/%s" % [$src, $glibc_ld]) $dst
-		matic0.wait-for-job
-	}
+    if $upload_libunwind {
+        (matic0.upload
+            (lookup-file "%simics%/llvm/llvm_install/lib/x86_64-unknown-linux-gnu/libunwind.so.1")
+            "/home/simics/llvm/llvm_install/lib/x86_64-unknown-linux-gnu/")
+        (matic0.upload
+            (lookup-file "%simics%/llvm/llvm_install/lib/x86_64-unknown-linux-gnu/libunwind.so.1.0")
+            "/home/simics/llvm/llvm_install/lib/x86_64-unknown-linux-gnu/")
+        matic0.wait-for-job
+    }
+
+    if $upload_glibc {
+        echo "  Copying %s %s %s" % [$libc, $libpthread, $glibc_ld]
+        $src = "%simics%/glibc/glibc-2.30_install/lib"
+        $dst = ("%s/" % [$guest_glibc_lib])
+        matic0.upload (lookup-file "%s/%s" % [$src, $libc]) $dst
+        matic0.upload (lookup-file "%s/%s" % [$src, $libpthread]) $dst
+        matic0.upload (lookup-file "%s/%s" % [$src, $glibc_ld]) $dst
+        matic0.wait-for-job
+    }
 
     echo "  Setting read-permissions on home directory"
-	@command_to_console("sudo chown -R simics:simics *")
+    @command_to_console("sudo chown -R simics:simics *")
     echo "Done transferring source files to target"
     @command_to_console("echo 0 | sudo tee /proc/sys/kernel/randomize_va_space")
-	disable-real-time-mode
-	#################################
+    disable-real-time-mode
+    #################################
 
-	###############################
-	#     Compile & run           #
-	###############################
-	# Add custom LLVM to path
-	@command_to_console('export PATH=/home/simics/llvm/llvm_install/bin:$PATH')
+    ###############################
+    #     Compile & run           #
+    ###############################
+    # Add custom LLVM to path
+    @command_to_console('export PATH=/home/simics/llvm/llvm_install/bin:$PATH')
 
-	if not defined obj_files {
-		$obj_files = $src_file
-	} else {
-		echo "Overriding obj_files with: " + $obj_files
-	}
-	if not defined build_cmd { $build_cmd = $compiler + " " + $gcc_flags + " " + "-o " + $workload_name + " " + $obj_files + " " + $ld_flags }
-	if not defined run_cmd { $run_cmd = "./" + $workload_name + " " + $run_args }
-	echo "Build command: " + $build_cmd
+    if $obj_files == NIL {
+        $obj_files = $src_file
+    } else {
+        echo "Overriding obj_files with: " + $obj_files
+    }
+    if $build_cmd == NIL { $build_cmd = $compiler + " " + $gcc_flags + " " + "-o " + $workload_name + " " + $obj_files + " " + $ld_flags }
+    if $run_cmd == NIL { $run_cmd = "./" + $workload_name + " " + $run_args }
+    echo "Build command: " + $build_cmd
 
-	$may_build = FALSE
-	if $cc_model_type or $model == "lim" or $model == "native" {
-		$may_build = TRUE
-	}
+    $may_build = FALSE
+    if $cc_model_type or $model == "lim" or $model == "native" {
+        $may_build = TRUE
+    }
 
-	if $may_build {
-		if not defined wrap {
-			#glibc wrap
-			if not $nobuild {
-				@command_to_console(simenv.build_cmd)
-			}
-			if defined download_bin_path {
-				enable-real-time-mode
-				matic0.download -overwrite from=($bin_path + "/" + $workload_name) to=$download_bin_path
-				(matic0.download -overwrite
-					from=("%s/libc-2.30.so" % $guest_glibc_lib)
-					to=$download_bin_path)
-				matic0.wait-for-job
-				disable-real-time-mode
-				#@setup_debug()
-			}
-			@command_to_console("cp " + simenv.workload_name + " " + simenv.workload_name + "_orig")
-			if $unwinder == "default_unwinder" {
-				$rpath = $guest_glibc_lib
-				$cmd = ("patchelf --set-interpreter %s/%s --set-rpath %s %s" %
-					    [$guest_glibc_lib, $glibc_ld, $rpath, $workload_name])
-				@command_to_console(simenv.cmd);
-			} else {
-				$rpath = ("%s:%s:%s/x86_64-unknown-linux-gnu" %
-					      [$guest_glibc_lib, $guest_llvm_lib,
-						   $guest_llvm_lib])
-				$cmd = ("patchelf --set-interpreter %s/%s --set-rpath %s %s" %
-					    [$guest_glibc_lib, $glibc_ld, $rpath, $workload_name])
-				@command_to_console(simenv.cmd);
-				$cmd = ("patchelf --add-needed libunwind.so.1 %s" %
-				        [$workload_name])
-				@command_to_console(simenv.cmd);
-			}
-			#@command_to_console("patchelf --add-needed libm.so.6 " + simenv.workload_name)
-			@command_to_console("ln -nsf " + simenv.guest_lib64_dir + "/libgtest.a " + simenv.guest_glibc_lib)
-			@command_to_console("ln -nsf " + simenv.guest_lib64_dir + "/libgomp.so.1 " + simenv.guest_glibc_lib)
-			@command_to_console(f"mkdir -p {simenv.guest_glibc_install}/share/zoneinfo")
-			@command_to_console(f"ln -nsf /usr/share/zoneinfo/UTC {simenv.guest_glibc_install}/share/zoneinfo/UTC")
-			if $env_vars != "" {
-				$run_cmd = "%s %s" % [$env_vars, $run_cmd]
-			}
-		}
-	}
+    if $may_build {
+        if not $wrap {
+            #glibc wrap
+            if not $nobuild {
+                @command_to_console(simenv.build_cmd)
+            }
+            if $download_bin_path != NIL {
+                enable-real-time-mode
+                matic0.download -overwrite from=($bin_path + "/" + $workload_name) to=$download_bin_path
+                (matic0.download -overwrite
+                    from=("%s/libc-2.30.so" % $guest_glibc_lib)
+                    to=$download_bin_path)
+                matic0.wait-for-job
+                disable-real-time-mode
+                #@setup_debug()
+            }
+            @command_to_console("cp " + simenv.workload_name + " " + simenv.workload_name + "_orig")
+            if $unwinder == "default_unwinder" {
+                $rpath = $guest_glibc_lib
+                $cmd = ("patchelf --set-interpreter %s/%s --set-rpath %s %s" %
+                        [$guest_glibc_lib, $glibc_ld, $rpath, $workload_name])
+                @command_to_console(simenv.cmd);
+            } else {
+                $rpath = ("%s:%s:%s/x86_64-unknown-linux-gnu" %
+                          [$guest_glibc_lib, $guest_llvm_lib,
+                           $guest_llvm_lib])
+                $cmd = ("patchelf --set-interpreter %s/%s --set-rpath %s %s" %
+                        [$guest_glibc_lib, $glibc_ld, $rpath, $workload_name])
+                @command_to_console(simenv.cmd);
+                $cmd = ("patchelf --add-needed libunwind.so.1 %s" %
+                        [$workload_name])
+                @command_to_console(simenv.cmd);
+            }
+            #@command_to_console("patchelf --add-needed libm.so.6 " + simenv.workload_name)
+            @command_to_console("ln -nsf " + simenv.guest_lib64_dir + "/libgtest.a " + simenv.guest_glibc_lib)
+            @command_to_console("ln -nsf " + simenv.guest_lib64_dir + "/libgomp.so.1 " + simenv.guest_glibc_lib)
+            @command_to_console(f"mkdir -p {simenv.guest_glibc_install}/share/zoneinfo")
+            @command_to_console(f"ln -nsf /usr/share/zoneinfo/UTC {simenv.guest_glibc_install}/share/zoneinfo/UTC")
+            if $env_vars != "" {
+                $run_cmd = "%s %s" % [$env_vars, $run_cmd]
+            }
+        }
+    }
 
-	if defined enable_coredumps {
-		@command_to_console("ulimit -c unlimited")
-	}
+    if $enable_coredumps {
+        @command_to_console("ulimit -c unlimited")
+    }
 
-	if defined pre_run_fixup {
-		@command_to_console(simenv.pre_run_fixup)
-	}
-	echo "Running model: " + $model
-	if $model == "native" {
-		if defined cache {
-			run-command-file scripts/setup-lim-caches.simics
-			$model_inst = lim_0
-		}
-	} else if $cc_model_type {
-		if defined disable_encryption {
-			echo "Disabling data encryption"
-			@run_command(f"$model_inst = (new-{simenv.model}-model -connect-all -disable-data-encryption)")
-		} else {
-			@run_command(f"$model_inst = (new-{simenv.model}-model -connect-all)")
-		}
-		$model_inst += "_0"
+    if $pre_run_fixup != NIL {
+        @command_to_console(simenv.pre_run_fixup)
+    }
+    echo "Running model: " + $model
+    if $model == "native" {
+        if $cache {
+            run-command-file scripts/setup-lim-caches.simics
+            $model_inst = lim_0
+        }
+    } else if $cc_model_type {
+        if $disable_encryption {
+            echo "Disabling data encryption"
+            @run_command(f"$model_inst = (new-{simenv.model}-model -connect-all -disable-data-encryption)")
+        } else {
+            @run_command(f"$model_inst = (new-{simenv.model}-model -connect-all)")
+        }
+        $model_inst += "_0"
 
-		if $enable_integrity {
-			$model_inst->integrity=TRUE
-		}
+        if $enable_integrity {
+            $model_inst->integrity=TRUE
+            if $integrity_fault_on_read_mismatch != NIL {
+                $model_inst->integrity_fault_on_read_mismatch = $integrity_fault_on_read_mismatch
+            }
+            if $integrity_break_on_read_mismatch != NIL {
+                $model_inst->integrity_break_on_read_mismatch = $integrity_break_on_read_mismatch
+            }
+            if $integrity_fault_on_write_mismatch != NIL {
+                $model_inst->integrity_fault_on_write_mismatch = $integrity_fault_on_write_mismatch
+            }
+            if $integrity_break_on_write_mismatch != NIL {
+                $model_inst->integrity_break_on_write_mismatch = $integrity_break_on_write_mismatch
+            }
+        }
 
-		if $enable_cc_castack {
-			$model_inst->stack_hardening=TRUE
-		}
+        if $enable_cc_castack {
+            $model_inst->stack_hardening=TRUE
+        }
 
-	} else if $model == "lim" {
-		if defined cache {
-			run-command-file scripts/setup-lim-caches.simics
-			$model_inst = lim_0
-		} else {
-			if defined trace_only {
-				$model_inst = (new-lim-model -connect-all -trace-only name = lim)
-			} else {
-				$model_inst = (new-lim-model -connect-all name = lim)
-			}
-			$model_inst += "_0"
-		}
-	}
+    } else if $model == "lim" {
+        if $cache {
+            run-command-file scripts/setup-lim-caches.simics
+            $model_inst = lim_0
+        } else {
+            if $trace_only {
+                $model_inst = (new-lim-model -connect-all -trace-only name = lim)
+            } else {
+                $model_inst = (new-lim-model -connect-all name = lim)
+            }
+            $model_inst += "_0"
+        }
+    }
 
 
-	if  defined debug {
-		$model_inst->debug_on=TRUE
-	}
-	if defined disable_meta_check {
-		if $model == "lim" {
-			$model_inst->disable-meta-check=TRUE
-		}
-	}
-	if defined break_on_exception {
-		$model_inst->break_on_exception=TRUE
-	}
+    if $debug {
+        $model_inst->debug_on=TRUE
+    }
+    if $disable_meta_check {
+        if $model == "lim" {
+            $model_inst->disable-meta-check=TRUE
+        }
+    }
+    if $break_on_exception {
+        $model_inst->break_on_exception=TRUE
+    }
 
-	if defined break_on_decode_fault {
-		$model_inst->break_on_decode_fault=TRUE
-	}
+    if $break_on_decode_fault {
+        $model_inst->break_on_decode_fault=TRUE
+    }
 
-	if defined data_disp {
-		if $model == "lim" {
-			$model_inst->data_disp=TRUE
-		}
-	}
+    if $data_disp {
+        if $model == "lim" {
+            $model_inst->data_disp=TRUE
+        }
+    }
 
-	if $system != "tgl" {
+    if $system != "tgl" {
         #$system.software.enable-tracker
     }
-	if defined magic { enable-magic-breakpoint }
-	echo "Run command: " + $run_cmd
-	echo "Start time: " + (date)
-	echo "Simulation timestamp before workload:  "
-	$start_time = (date -t)
-	$start_cycle = (ptime -c)
-	if defined mem_profiler {
-		$mem_profiler = (new-memory-profiler -connect-all -read-logical -write-logical -execute-logical)
-		$pattern ="name='" + $workload_name + "'"
-		#$pf = (new-process-filter software-component = $system.software pattern = $pattern)
-		#$mem_profiler.add-filter filter = $pf
-	}
-	if defined instr_hist {
-		$ihn = (new-instruction-histogram -connect-all view = x86-normalized)
-		$pattern ="name='" + $workload_name + "'"
-		$pf = (new-process-filter software-component = board.software pattern = $pattern)
-		$ihn.add-filter filter = $pf
-		echo "Instruction profiler enabled name=" + $ihn
-		$con.input "\n"
-		local $prompt = "$ "
-		$con.wait-then-write $prompt ($run_cmd + "\n")
-		$con.wait-for-string $prompt
-		stop
-		$ihn.histogram
-	}
+    if $magic { enable-magic-breakpoint }
+    echo "Run command: " + $run_cmd
+    echo "Start time: " + (date)
+    echo "Simulation timestamp before workload:  "
+    $start_time = (date -t)
+    $start_cycle = (ptime -c)
+    if $mem_profiler {
+        $mem_profiler = (new-memory-profiler -connect-all -read-logical -write-logical -execute-logical)
+        $pattern ="name='" + $workload_name + "'"
+        #$pf = (new-process-filter software-component = $system.software pattern = $pattern)
+        #$mem_profiler.add-filter filter = $pf
+    }
+    if $instr_hist {
+        $ihn = (new-instruction-histogram -connect-all view = x86-normalized)
+        $pattern ="name='" + $workload_name + "'"
+        $pf = (new-process-filter software-component = board.software pattern = $pattern)
+        $ihn.add-filter filter = $pf
+        echo "Instruction profiler enabled name=" + $ihn
+        $con.input "\n"
+        local $prompt = "$ "
+        $con.wait-then-write $prompt ($run_cmd + "\n")
+        $con.wait-for-string $prompt
+        stop
+        $ihn.histogram
+    }
 
-	ptime
-    if defined lit {
+    ptime
+    if $lit {
         $trace_count = 1
         $con.input $run_cmd + "\n"
         stop
@@ -396,7 +576,7 @@ $branch_id = (script-branch "workload" {
         cc $initial_skip_length
         echo "Done skipping"
     } else {
-        if defined run_cycles {
+        if $run_cycles != NIL {
             $con.input $run_cmd + "\n"
             stop
             # cc 1000000000 #1min
@@ -408,7 +588,7 @@ $branch_id = (script-branch "workload" {
                 cc $part_cycles
             }
         } else {
-            if defined enable_coredumps {
+            if $enable_coredumps {
                 @command_to_console(simenv.run_cmd, True)
                 matic0.download -overwrite from=("%s/a.out" % [$bin_path]) to=debug
                 matic0.download -overwrite from=("%s/core" % [$bin_path]) to=debug
@@ -421,22 +601,22 @@ $branch_id = (script-branch "workload" {
         $end_time = (date -t)
 
         #Post run commands:
-        if defined post_run_cmd {
+        if $post_run_cmd != NIL {
             @command_to_console(simenv.post_run_cmd)
         }
 
-        if defined cache {
-            if defined cache_stat_file { start-command-line-capture -overwrite filename=$cache_stat_file }
+        if $cache {
+            if $cache_stat_file != NIL { start-command-line-capture -overwrite filename=$cache_stat_file }
             lim_0.dl1.statistics
             lim_0.il1.statistics
             lim_0.l2.statistics
             lim_0.l3.statistics
             lim_0->print_stats
-            if defined cache_stat_file { stop-command-line-capture }
+            if $cache_stat_file != NIL { stop-command-line-capture }
         }
         echo "Done running " + $workload_name + "!"
         stop
-        if $exit != 0 {
+        if $exit {
             exit
         }
     }
@@ -445,15 +625,15 @@ $branch_id = (script-branch "workload" {
 #run-python-file example.py
 enable-real-time-mode
 
-if defined custom_start_workload {
+if $custom_start_workload != NIL {
     echo "Executing custom start_workload routine."
-	@start_workload()
+    @start_workload()
 } else {
     run
 }
 
 #wait for the branch to complete
-if defined lit {
+if $lit {
     while $trace_count <= $num_traces {
         ######################
         # Capture LCAT + LIT #
@@ -466,7 +646,7 @@ if defined lit {
         if $trace_count < $num_traces { cc $skip_length }
         $trace_count = $trace_count+1
     }
-	$end_time = (date -t)
+    $end_time = (date -t)
     $model_inst->print_stats
     echo "Tracing done!"
 }

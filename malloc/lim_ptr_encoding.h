@@ -265,6 +265,7 @@ lim_compute_bounded_data_size(void *ptr, size_t data_size, size_t meta_size,
     uint64_t ptr_midpoint = get_middle_address((uint64_t)ptr, encoded_size);
     void *ptr_metadata =
             (void *)get_metadata_address((uint64_t)ptr, encoded_size);
+    (void)ptr_metadata;
     assert((uint64_t)ptr_metadata > (uint64_t)ptr);
     assert((uint64_t)ptr_metadata <= (uint64_t)ptr_midpoint);
     // inclusive lower bound that will be rounded up to 8B boundary:

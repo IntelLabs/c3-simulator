@@ -4,6 +4,7 @@
 
 project_dir := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))../..
 common_dir := $(project_dir)/modules/common
+c3lib_dir := $(project_dir)/c3lib
 include $(common_dir)/Makefile.common.mk
 
 PYTHON_FILES = module_load.py simics_start.py
@@ -24,6 +25,7 @@ else
 	MODULE_CFLAGS += -O3
 endif
 MODULE_CFLAGS += -I$(common_dir)
+MODULE_CFLAGS += -I$(c3lib_dir)
 
 SIMICS_API := latest
 THREAD_SAFE = yes

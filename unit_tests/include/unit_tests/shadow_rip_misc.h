@@ -1,3 +1,6 @@
+// Copyright 2024 Intel Corporation
+// SPDX-License-Identifier: MIT
+
 #ifndef UNIT_TESTS_INCLUDE_UNIT_TESTS_SHADOW_RIP_MISC_H_
 #define UNIT_TESTS_INCLUDE_UNIT_TESTS_SHADOW_RIP_MISC_H_
 

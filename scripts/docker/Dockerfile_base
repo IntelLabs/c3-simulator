@@ -12,10 +12,11 @@ ARG NASM_SRC=/opt/nasm/src
 ARG NASM_DST=/opt/nasm/nasm-2.15.05
 ARG NASM_REL=nasm-2.15.05
 
+# The Simics versions are overridden in scripts/make/docker.mk
 ARG SIMICS_INSTALL_DIR=/opt/simics/simics-6
-ARG SIMICS_ISPM="intel-simics-package-manager-1.7.5"
+ARG SIMICS_ISPM="intel-simics-package-manager-1.8.3"
 ARG SIMICS_ISPM_PKG="${SIMICS_ISPM}-linux64.tar.gz"
-ARG SIMICS_BUNDLE_PKG="simics-6-packages-2023-31-linux64.ispm"
+ARG SIMICS_BUNDLE_PKG="simics-6-packages-2024-05-linux64.ispm"
 
 ARG MBUILD_GIT_URL="https://github.com/intelxed/mbuild.git"
 ARG MBUILD_GIT_TAG="v2022.07.28"
@@ -32,6 +33,7 @@ RUN apt-get update && apt-get upgrade -y \
     automake \
     bison \
     build-essential \
+    ccache \
     clang-format \
     clang-tidy \
     wget \
@@ -53,7 +55,10 @@ RUN apt-get update && apt-get upgrade -y \
     ninja-build \
     python-is-python3 \
     python3 \
+    python3-openpyxl \
+    python3-pandas \
     python3-pip \
+    python3-xlrd \
     zstd \
     bc \
     cpio \
@@ -61,6 +66,7 @@ RUN apt-get update && apt-get upgrade -y \
     libjson-perl \
     dbus-x11 \
     openssh-server \
+    unzip \
     xauth \
     xterm \
     && apt-get clean \
@@ -81,6 +87,7 @@ COPY ${SIMICS_ISPM_PKG} ${C3_USER_HOME}
 RUN mkdir -p /opt/simics/ispm && pushd /opt/simics/ispm && \
     tar xzf ${C3_USER_HOME}/$SIMICS_ISPM_PKG && \
     /opt/simics/ispm/$SIMICS_ISPM/ispm -y packages \
+            --trust-insecure-packages \
             --install-bundle ${C3_USER_HOME}/$SIMICS_BUNDLE_PKG \
             --install-dir $SIMICS_INSTALL_DIR && \
     ln -s $SIMICS_INSTALL_DIR/$(ls $SIMICS_INSTALL_DIR | \

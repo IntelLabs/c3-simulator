@@ -1,3 +1,6 @@
+# Copyright 2021-2024 Intel Corporation
+# SPDX-License-Identifier: MIT
+
 import subprocess
 import os
 import sys
@@ -6,10 +9,10 @@ default_simics_options = ["-batch-mode"]
 default_other_args = []
 
 default_models=[ "native" ]
-heap_models=[ "c3", "c3-integrity", "c3-integrity-intra", "c3-castack" ]
+heap_models=[ "c3", "c3-integrity", "c3-integrity-intra", "c3-castack",
+             "c3-nowrap" ]
 stack_models=[ "c3-castack" ]
 lim_models=[ "lim", "lim_disp", "lim-trace" ]
-
 
 
 
@@ -51,11 +54,15 @@ class SimicsInstance:
         proc = subprocess.run(run_cmd)
         return proc
 
+    def decode_proc_ostream(self, stream):
+        return (stream.decode("utf-8", errors="ignore")
+                      .replace("\\r\\n", "\r")
+                      .replace("\\n", "\n"))
+
     def dump_proc(self, proc):
-        # Simple, stupid, manual converting newlines to avoid Test=true bug
         return f'\nargs: {" ".join(self.other_args)}\n' + \
-            f'STDOUT\n{proc.stdout.decode("utf-8", errors="ignore")}\n' + \
-            f'STDERR\n{proc.stderr.decode("utf-8", errors="ignore")}\n'
+            f'STDOUT\n{self.decode_proc_ostream(proc.stdout)}\n' + \
+            f'STDERR\n{self.decode_proc_ostream(proc.stderr)}\n'
 
 class LocalUnitTest:
     cxx = ["g++"]

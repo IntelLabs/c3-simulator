@@ -1,3 +1,6 @@
+// Copyright 2024 Intel Corporation
+// SPDX-License-Identifier: MIT
+
 // model: cc
 // nomodel: -integrity -castack -zts
 // no_kernel: yes

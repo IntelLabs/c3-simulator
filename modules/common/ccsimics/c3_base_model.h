@@ -1,10 +1,11 @@
-/*
- Copyright 2016 Intel Corporation
- SPDX-License-Identifier: MIT
-*/
+// Copyright 2016-2024 Intel Corporation
+// SPDX-License-Identifier: MIT
+
 #ifndef MODULES_COMMON_CCSIMICS_C3_BASE_MODEL_H_
 #define MODULES_COMMON_CCSIMICS_C3_BASE_MODEL_H_
 
+#include <unistd.h>
+#include <memory>
 #include <simics/model-iface/cpu-instrumentation.h>
 #include <simics/processor/types.h>
 #include <simics/simulator/control.h>
@@ -12,7 +13,7 @@
 #include "ccsimics/data_encryption.h"
 #include "ccsimics/shadow_rip.h"
 #include "ccsimics/simics_util.h"
-#include "crypto/cc_encoding.h"
+#include "c3/crypto/cc_encoding.h"
 
 enum class RW { READ, WRITE };
 inline bool is_write(enum RW rw) { return rw == RW::WRITE; }
@@ -138,9 +139,9 @@ class C3BaseModel {
     /**
      * @brief Check if memory access is valid
      *
-     * This is invoked in the modify_data_on_mem_accss callback to check whether
-     * the LA access using the given CA is valid.  This is invoked in the
-     * modify_data_on_mem_accss callback after the check_memory_access has
+     * This is invoked in the modify_data_on_mem_access callback to check
+     * whether the LA access using the given CA is valid.  This is invoked in
+     * the modify_data_on_mem_access callback after the check_memory_access has
      * passed. At that point we have the la_encoded_ and la_decoded_ variables
      * set for the current memory access, so they are safe to use.
      *
@@ -154,6 +155,7 @@ class C3BaseModel {
      * @return true
      * @return false
      */
+
     virtual inline bool check_memory_access(logical_address_t la, enum RW rw,
                                             const uint8_t *data, size_t size) {
         return true;
@@ -162,8 +164,8 @@ class C3BaseModel {
     /**
      * @brief Get the data tweak object
      *
-     * This is invoked in the modify_data_on_mem_accss callback, after calling
-     * check_memory_access(), provided it returned succcess. The returned value
+     * This is invoked in the modify_data_on_mem_access callback, after calling
+     * check_memory_access(), provided it returned success. The returned value
      * will be used as the data encryption/decryption tweak for the memory
      * access.
      *
@@ -205,7 +207,7 @@ class C3BaseModel {
 
  protected:
     /**
-     * @brief Performs address tranlation
+     * @brief Performs address translation
      *
      * @param la
      * @param access_type
@@ -358,8 +360,9 @@ logical_address_t C3BaseModel<ConnectionTy, CtxTy, PtrEncTy>::address_before(
                                          "non-canonical address");
                 }
                 if (non_canonical_count == max_non_canonical_count) {
-                    SIM_printf("Maximum warnings about non-canonical decoded "
-                               "addres reached. Supressing further warnings\n");
+                    SIM_printf(
+                            "Maximum warnings about non-canonical decoded "
+                            "address reached. Suppressing further warnings\n");
                 }
                 non_canonical_count++;
             }
@@ -453,7 +456,9 @@ void C3BaseModel<ConnectionTy, CtxTy, PtrEncTy>::modify_data_on_mem_access(
             return;
         }
     }
+
     check_memory_access(la, rw, bytes.data, bytes.size);
+
     uint64_t data_tweak = get_data_tweak(this->la_encoded_);
     ptr_metadata_t cc_metadata = {0};
     cpu_bytes_t bytes_mod =
@@ -462,6 +467,7 @@ void C3BaseModel<ConnectionTy, CtxTy, PtrEncTy>::modify_data_on_mem_access(
     if (!this->con_->disable_data_encryption) {
         con_->set_bytes(mem, bytes_mod);
     }
+
     if (should_print_data_modification(rw)) {
         print_data_modification(data_tweak, bytes, bytes_mod);
     }

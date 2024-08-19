@@ -1,3 +1,6 @@
+// Copyright 2024 Intel Corporation
+// SPDX-License-Identifier: MIT
+
 // model: cc
 // no_kernel: yes
 // nomodel: -zts
@@ -111,7 +114,7 @@ TEST(ShadowRip, nested_call_ret) {
     ASSERT_NE(pair2.second, pair1.second);
 
     auto pair3 = nested_rip_rel(&get_rip_rel_lea);
-    // Check we got differnt values from the reference values
+    // Check we got different values from the reference values
     ASSERT_NE(pair3.first, pair2.first);
     ASSERT_NE(pair3.second, pair2.second);
     ASSERT_EQ(pair3.first, pair1.first);

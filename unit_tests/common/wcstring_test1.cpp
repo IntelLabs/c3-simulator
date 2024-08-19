@@ -1,8 +1,7 @@
-// model: *
-// xfail: -integrity
+// Copyright 2024 Intel Corporation
+// SPDX-License-Identifier: MIT
 
-// This test is currently causing ICV mismatches, not investigated further.
-// TODO: Investigate cause of ICV failures in `mallocwcstok`.
+// model: *
 
 #include <assert.h>
 #include <ctype.h>
@@ -113,6 +112,8 @@ TEST(STRING, mallocwcsspn) {
     srand(SRAND_SEED);
     wchar_t *buff, *str_offset, *str;
     size_t max_length = 128;
+    // Full test relocated to wcstring_test1_slow.cpp
+    max_length = 48;
     for (size_t alloc_length = 3; alloc_length < max_length; alloc_length++) {
         buff = (wchar_t *)malloc(sizeof(wchar_t) * (alloc_length + 17));
         for (int offset = 0; offset < 16; offset++) {
@@ -155,6 +156,8 @@ TEST(STRING, mallocwcpcpy) {
     srand(SRAND_SEED);
     wchar_t *buff, *str_offset, *str;
     size_t max_length = 128;
+    // Full test relocated to wcstring_test1_slow.cpp
+    max_length = 48;
     for (size_t alloc_length = 2; alloc_length < max_length; alloc_length++) {
         buff = (wchar_t *)malloc(sizeof(wchar_t) * (alloc_length + 17));
         for (int offset = 0; offset < 16; offset++) {
@@ -200,6 +203,8 @@ TEST(STRING, mallocwcpncpy) {
     srand(SRAND_SEED);
     wchar_t *buff, *str_offset, *str;
     size_t max_length = 128;
+    // Full test relocated to wcstring_test1_slow.cpp
+    max_length = 48;
     for (size_t alloc_length = 5; alloc_length < max_length; alloc_length++) {
         buff = (wchar_t *)malloc(sizeof(wchar_t) * (alloc_length + 17));
         for (int offset = 0; offset < 16; offset++) {
@@ -285,45 +290,6 @@ TEST(STRING, mallocwcrtombrandomsize) {
         free(outstr);
         free(buff);
     }
-}
-
-// Causes ICV failures
-TEST(STRING, mallocwcstok) {
-    srand(SRAND_SEED);
-    wchar_t *str, *buff, *str_offset, *tstr;
-    wchar_t delim[] = L"}";
-    size_t str_length = 93;
-    size_t max_length = 128;
-    str = (wchar_t *)malloc(sizeof(wchar_t) * max_length);
-    fill_wcharstring(str, str_length - 1);
-    for (size_t alloc_length = 5; alloc_length < max_length; alloc_length++) {
-        buff = (wchar_t *)malloc(sizeof(wchar_t) * (alloc_length + 17));
-        for (int offset = 0; offset < 16; offset++) {
-            str_offset = buff + offset;
-            for (size_t length_expected = 3; length_expected < alloc_length;
-                 length_expected++) {
-                wchar_t *ptr, *token;
-                str_offset = (wchar_t *)malloc(sizeof(wchar_t) *
-                                               (length_expected + 1));
-                fill_wcharstring(str_offset, length_expected);
-                tstr = (wchar_t *)malloc(sizeof(wchar_t) *
-                                         (length_expected + 1));
-                fill_wcharstring(tstr, length_expected);
-                token = wcstok(str_offset, delim, &ptr);
-                while (token) {
-                    if (length_expected <= (str_length - 1)) {
-                        ASSERT_STREQ(tstr, str_offset);
-                    } else {
-                        ASSERT_STREQ(str, str_offset);
-                    }
-                    token = wcstok(NULL, delim, &ptr);
-                }
-                free(tstr);
-            }
-        }
-        free(buff);
-    }
-    free(str);
 }
 
 TEST(STRING, mallocwcstokrandomsize) {

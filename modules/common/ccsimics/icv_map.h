@@ -1,7 +1,5 @@
-/*
- Copyright Intel Corporation
- SPDX-License-Identifier: MIT
-*/
+// Copyright 2023-2024 Intel Corporation
+// SPDX-License-Identifier: MIT
 
 #ifndef MODULES_COMMON_CCSIMICS_ICV_MAP_H_
 #define MODULES_COMMON_CCSIMICS_ICV_MAP_H_
@@ -11,7 +9,7 @@
 #include <memory>
 #include <utility>
 #include "ccsimics/simics_util.h"
-#include "malloc/cc_globals.h"
+#include "c3/malloc/cc_globals.h"
 
 namespace ccsimics {
 

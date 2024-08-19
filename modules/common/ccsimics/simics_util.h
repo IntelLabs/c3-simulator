@@ -1,7 +1,6 @@
-/*
- Copyright 2016 Intel Corporation
- SPDX-License-Identifier: MIT
-*/
+// Copyright 2016-2024 Intel Corporation
+// SPDX-License-Identifier: MIT
+
 #ifndef MODULES_COMMON_CCSIMICS_SIMICS_UTIL_H_
 #define MODULES_COMMON_CCSIMICS_SIMICS_UTIL_H_
 
@@ -10,6 +9,7 @@
 #include <sstream>
 #include <string>
 #include <simics/arch/x86.h>
+#include <simics/simulator/control.h>
 #include <simics/simulator/output.h>
 
 #if defined(__cplusplus)
@@ -185,7 +185,7 @@ static inline void print_simics_stacktrace() {
  */
 static inline const char *c3_asan_default_options() {
     return "verbosity=0:debug=false"
-           // Disabling leak detection as module isn't destoryed on exit
+           // Disabling leak detection as module isn't destroyed on exit
            ":detect_leaks=false"
            ":check_initialization_order=true"
            ":detect_stack_use_after_return=true";
@@ -215,6 +215,15 @@ static inline int compare_bytes(const uint8_t *a, const uint8_t *b,
         }
     }
     return 1;
+}
+
+#define ccsimics_not_implemented()                                             \
+    ccsimics::__ccsimics_not_implemented(__func__, __FILENAME__, __LINE__)
+
+__attribute__((noreturn)) static inline void
+__ccsimics_not_implemented(const char *func_name, const char *file, int line) {
+    SIM_printf("Function %s not implemented in %s:%d\n", func_name, file, line);
+    SIM_quit(1);
 }
 
 }  // namespace ccsimics

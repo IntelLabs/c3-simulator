@@ -1,21 +1,66 @@
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
 repos:
--   repo: https://github.com/pre-commit/pre-commit-hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.4.0
     hooks:
-    -   id: trailing-whitespace
-    -   id: end-of-file-fixer
-    -   id: check-yaml
     -   id: check-added-large-files
     -   id: check-ast
     -   id: check-case-conflict
+    -   id: check-json
     -   id: check-merge-conflict
--   repo: https://github.com/pocc/pre-commit-hooks
+    -   id: check-symlinks
+    -   id: check-yaml
+    -   id: end-of-file-fixer
+    -   id: trailing-whitespace
+  - repo: https://github.com/pocc/pre-commit-hooks
     rev: v1.3.5
     hooks:
       - id: clang-format
         args:
         - -style=file
-      # - id: clang-tidy
+        - -i
       - id: cpplint
+  - repo: https://github.com/crate-ci/typos
+    rev: v1.20.9
+    hooks:
+      - id: typos
+        args:
+          - --force-exclude
+  - repo: https://github.com/Lucas-C/pre-commit-hooks
+    rev: v1.5.1
+    hooks:
+      - id: insert-license
+        name: insert-license-shell
+        files: \.(sh|py)$
+        args:
+          # defaults to: LICENSE.txt
+          - --use-current-year
+          - --license-filepath
+          - HEADER
+      - id: insert-license
+        name: insert-license-makefile
+        files: (^Makefile|\.mk)$
+        args:
+          # defaults to: LICENSE.txt
+          - --use-current-year
+          - --license-filepath
+          - HEADER
+      - id: insert-license
+        name: insert-license-simics
+        files: \.simics$
+        args:
+          # defaults to: LICENSE.txt
+          - --use-current-year
+          - --license-filepath
+          - HEADER
+      - id: insert-license
+        name: insert-license-cpp
+        files: \.(c|cc|cxx|cpp|h|hpp|hxx|inl|h.in)$
+        args:
+          # defaults to: LICENSE.txt
+          - --use-current-year
+          - --license-filepath
+          - HEADER
+          - --comment-style
+          - //

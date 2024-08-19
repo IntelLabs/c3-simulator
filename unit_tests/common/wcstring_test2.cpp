@@ -1,3 +1,6 @@
+// Copyright 2024 Intel Corporation
+// SPDX-License-Identifier: MIT
+
 // model: *
 #include <assert.h>
 #include <ctype.h>
@@ -71,7 +74,9 @@ TEST(STRING, mallocwcsstrrandomsize) {
     wchar_t *buff, *str_offset, *str;
     size_t max_length = 4096 * 4;
     size_t alloc_length;
-    for (size_t i = 1; i <= 100; i++) {
+    // Full 100 rounds in wcstring_test2_slow.cpp
+    // for (size_t i = 1; i <= 100; i++) {
+    for (size_t i = 1; i <= 10; i++) {
         alloc_length = rand() % max_length + 17;
         int offset = rand() % 16;
         buff = (wchar_t *)malloc(sizeof(wchar_t) * (alloc_length + offset + 1));
