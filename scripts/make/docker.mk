@@ -24,19 +24,24 @@ DOCKER_DOCKERFILE = $(project_dir)/scripts/docker/Dockerfile
 DOCKER_BASE_SHA = $(shell sha256sum $(DOCKER_BASE_DOCKERFILE) | head -c16)
 DOCKER_SHA = $(shell sha256sum $(DOCKER_DOCKERFILE) | head -c16)
 
-# Compose the tags / image names form the Dockerfile checksums and also include
-# the host username in the user-specific image.
-DOCKER_BASE_TAG := c3_base.$(DOCKER_BASE_SHA)
-DOCKER_TAG := $(shell whoami)/c3_docker.$(DOCKER_SHA).$(DOCKER_BASE_SHA)
 
-SIMICS_ISPM ?= intel-simics-package-manager-1.8.3
-SIMICS_ISPM_PKG = $(SIMICS_ISPM)-linux64.tar.gz
-SIMICS_BUNDLE_PKG ?= simics-6-packages-2024-05-linux64.ispm
-SIMICS_PUB_URL = https://software.intel.com/content/www/us/en/develop/articles/simics-simulator.html
-SIMICS_MISSING_MESSAGE = "Please download Simics installation packages:"
-SIMICS_MISSING_MESSAGE += "\\n\\t$(SIMICS_BUNDLE_PKG)\\n\\t$(SIMICS_ISPM_PKG)"
-SIMICS_MISSING_MESSAGE += "\\nto scripts/docker."
-SIMICS_MISSING_MESSAGE += "\\n\\nPublic Simics release can be found at $(SIMICS_PUB_URL)\\n"
+# Find latest Simics packages scripts/docker
+SIMICS_BUNDLE_PKG ?= $(shell cd scripts/docker; ls -v simics-6-packages* 2> /dev/null | sort -V | tail -n1)
+SIMICS_ISPM_PKG ?= $(shell cd scripts/docker; ls -v intel-simics-package-manager* 2> /dev/null| sort -V | head -n1)
+
+# Set placeholder packages names if we could not find any locally
+ifeq ($(SIMICS_BUNDLE_PKG),)
+	SIMICS_BUNDLE_PKG = simics-6-packages-2024-25-linux64.ispm
+endif
+ifeq ($(SIMICS_ISPM_PKG),)
+	SIMICS_ISPM_PKG = intel-simics-package-manager-1.9.4-linux64.tar.gz
+endif
+
+# Compose the tags / image names from the Dockerfile checksums.
+# Include Simics version in base container tag
+DOCKER_BASE_TAG := c3_base.$(shell echo $(DOCKER_BASE_SHA) $(SIMICS_ISPM_PKG) $(SIMICS_BUNDLE_PKG) | sha256sum - | head -c16)
+# Include the host username in the user-specific image.
+DOCKER_TAG := $(shell whoami)/c3_docker.$(DOCKER_SHA).$(DOCKER_BASE_SHA)
 
 # Base stuff
 DOCKER_ARGS += --mount type=bind,source="$(project_dir)/malloc",target="$(workdir)/malloc",readonly
@@ -146,28 +151,25 @@ DOCKER_ARGS += -v "/home/$(shell whoami)/.Xauthority:/home/c3_user/.Xauthority:r
 scripts/docker/c3_docker.key:
 	ssh-keygen -t rsa -N "" -C $(DOCKER_TAG) -f $@
 
-
-# Make sure we have the $(SIMICS_BUNDLE_PKG) installation files. If available
-# in a shared /opt/simics/simics_packages_public, then copy from there.
+# Targets to check for Simics packages
 scripts/docker/$(SIMICS_BUNDLE_PKG):
-ifeq (,$(wildcard /opt/simics/simics_packages_public/$(SIMICS_BUNDLE_PKG)))
-	@echo "Cannot find scripts/docker/$(SIMICS_BUNDLE_PKG)!\\n"
-	@echo "$(SIMICS_MISSING_MESSAGE)"
-	false
-else
-	cp /opt/simics/simics_packages_public/$(SIMICS_BUNDLE_PKG) $@
-endif
+	$(warning Cannot find scripts/docker/$(SIMICS_BUNDLE_PKG)")
+	$(error $(SIMICS_MISSING_MESSAGE))
 
-# Make sure we have the $(SIMICS_BUNDLE_PKG) installation files. If available
-# in a shared /opt/simics/simics_packages_public, then copy from there.
 scripts/docker/$(SIMICS_ISPM_PKG):
-ifeq (,$(wildcard /opt/simics/simics_packages_public/$(SIMICS_ISPM_PKG)))
-	@echo "Cannot find scripts/docker/$(SIMICS_ISPM_PKG)!\\n"
-	@echo "$(SIMICS_MISSING_MESSAGE)"
-	false
-else
-	cp /opt/simics/simics_packages_public/$(SIMICS_ISPM_PKG) $@
-endif
+	$(warning Cannot find scripts/docker/$(SIMICS_ISPM_PKG))
+	$(error $(SIMICS_MISSING_MESSAGE))
+
+define SIMICS_MISSING_MESSAGE
+Missing some Simics packages!
+
+Please download the following (or newer) to the scripts/docker folder:
+	$(SIMICS_BUNDLE_PKG)
+	$(SIMICS_ISPM_PKG)
+
+Public Simics release can be found at https://software.intel.com/content/www/us/en/develop/articles/simics-simulator.html
+
+endef
 
 # The target for the base docker image.
 #
@@ -182,7 +184,7 @@ ifeq (,$(shell command -v docker >/dev/null 2>&1 && \
                docker image ls | grep $(DOCKER_BASE_TAG)))
 	docker build scripts/docker -t $(DOCKER_BASE_TAG) \
 		-f $(DOCKER_BASE_DOCKERFILE) \
-		--build-arg SIMICS_ISPM="$(SIMICS_ISPM)" \
+		--build-arg SIMICS_ISPM="$(patsubst %-linux64.tar.gz,%,$(SIMICS_ISPM_PKG))" \
 		--build-arg SIMICS_BUNDLE_PKG="$(SIMICS_BUNDLE_PKG)"
 endif
 

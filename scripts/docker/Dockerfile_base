@@ -86,7 +86,7 @@ COPY ${SIMICS_BUNDLE_PKG} ${C3_USER_HOME}
 COPY ${SIMICS_ISPM_PKG} ${C3_USER_HOME}
 RUN mkdir -p /opt/simics/ispm && pushd /opt/simics/ispm && \
     tar xzf ${C3_USER_HOME}/$SIMICS_ISPM_PKG && \
-    /opt/simics/ispm/$SIMICS_ISPM/ispm -y packages \
+    /opt/simics/ispm/$SIMICS_ISPM/ispm packages -y \
             --trust-insecure-packages \
             --install-bundle ${C3_USER_HOME}/$SIMICS_BUNDLE_PKG \
             --install-dir $SIMICS_INSTALL_DIR && \
