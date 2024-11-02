@@ -6,7 +6,7 @@ decl {
 	! pre-built installation directories or by uploading the source and building
 	! within the Simics guest.
 
-	param checkpoint : string or nil
+	param checkpoint : string or nil = NIL
 	! Source checkpoint to use as base for new checkpoint. If unset, script
 	! will bootstrap from targets/qsp-x86/qsp-clear-linux.simics.
 	param save_checkpoint : string

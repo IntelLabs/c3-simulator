@@ -18,7 +18,8 @@
 #include <string.h>
 #include "ascon_cipher.h"  // NOLINT
 #include "bipbip.h"        // NOLINT
-#include "../malloc/cc_globals.h"
+#include "c3/generic/ca.h"
+#include "c3/generic/defines.h"
 
 #if defined(__cplusplus)
 

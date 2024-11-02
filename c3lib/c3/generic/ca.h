@@ -316,5 +316,8 @@ template <typename T> static inline uint64_t get_ciphertext(T ptr) {
 #ifdef C3_X86_64
 #include "c3/x86_64/x86_64.ca.h"
 #endif  // C3_X86_64
+#ifdef C3_RISC_V
+#include "c3/risc-v/risc-v.ca.h"
+#endif  // C3_RISC_V
 
 #endif  // C3LIB_C3_GENERIC_CA_H_

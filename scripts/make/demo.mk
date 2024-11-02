@@ -3,8 +3,8 @@
 
 PHONY: demo-lldb_debug_01
 demo-lldb_debug_01:
+	test ! -e checkpoints/cc_kernel.ckpt || $(MAKE) ckpt-cc_kernel
 	$(MAKE) make_llvm-lldb-only
-	$(MAKE)
 ifeq (1,$(VERBOSE))
 	./scripts/demo/lldb_debug_01.sh --verbose
 else
@@ -12,13 +12,18 @@ else
 endif
 
 
-scripts/demo/cwe457.sh: make_llvm
-	$(MAKE)
+.PHONY: scripts/demo/cwe457.sh
+scripts/demo/cwe457.sh:
+	test ! -e checkpoints/cc_kernel.ckpt || $(MAKE) ckpt-cc_kernel
+	$(MAKE) make_llvm
 
-scripts/demo/clang_tidy.sh: make_llvm
-	$(MAKE)
+.PHONY: scripts/demo/clang_tidy.sh
+scripts/demo/clang_tidy.sh:
+	test ! -e checkpoints/cc_kernel.ckpt || $(MAKE) ckpt-cc_kernel
+	$(MAKE) make_llvm
 
 demo-%: scripts/demo/%
+	$(MAKE)
 	./scripts/demo/$*
 
 demo-juliet: tests/nist-juliet/scripts/run_juliet.sh

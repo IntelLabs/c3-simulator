@@ -19,6 +19,7 @@ endif
 # be deleted, old timestamped checkpoints will remain untouched.
 CKPT_GLIBC      	?= checkpoints/cc_glibc.ckpt
 CKPT_GLIBC_NOWRAP	?= checkpoints/cc_glibc_nowrap.ckpt
+CKPT_GLIBC_1B_OVF	?= checkpoints/cc_glibc_1b_ovf.ckpt
 CKPT_LLVM       	?= checkpoints/cc_llvm.ckpt
 CKPT_KERNEL     	?= checkpoints/cc_kernel.ckpt
 CKPT_KERNEL_1B_OVF 	?= checkpoints/cc_kernel_1b_ovf.ckpt
@@ -46,6 +47,7 @@ SIMICS_KERNEL_CHECKPOINT_ARG = checkpoint=$(shell readlink -e $(CKPT_KERNEL_BASE
 CHECKPOINT_TARGETS = $(CKPT_KERNEL) $(CKPT_KERNEL_1B_OVF) $(CKPT_LLVM) $(CKPT_GLIBC) $(CKPT_DEBUGGER)
 CHECKPOINT_TARGETS += $(CKPT_NOKERNEL_BASE) $(CKPT_KERNEL_PROT)
 CHECKPOINT_TARGETS += $(CKPT_KERNEL_BASE) $(CKPT_GLIBC_NOWRAP)
+CHECKPOINT_TARGETS += $(CKPT_GLIBC_1B_OVF)
 
 CHECKPOINTS_TO_CLEAN = $(CKPT_KERNEL) $(CKPT_KERNEL_1B_OVF) $(CKPT_LLVM) $(CKPT_GLIBC)
 CHECKPOINTS_TO_CLEAN += $(CKPT_DEBUGGER) $(CKPT_KERNEL_PROT)
@@ -91,6 +93,15 @@ $(CKPT_GLIBC).$(VERSION_LABEL): simics_setup make_glibc-shim
 		do_llvm=FALSE \
 		save_checkpoint=$@
 
+$(CKPT_GLIBC_1B_OVF).$(VERSION_LABEL): simics_setup make_glibc-shim-detect-1b-ovf
+	$(info === Creating Simics checkpoint $@ (glibc))
+	test ! -e $@ || (echo "Already exists: $@" && false)
+	./simics $(CKPT_SIMICS_ARGS) scripts/update_libs.simics \
+		$(SIMICS_NOKERNEL_CHECKPOINT_ARG) \
+		$(CKPT_SIMICS_SCRIPT_ARGS) \
+		do_glibc=TRUE \
+		do_llvm=FALSE \
+		save_checkpoint=$@
 
 # Target for creating local no-kernel checkpoint
 $(CKPT_GLIBC_NOWRAP).$(VERSION_LABEL): simics_setup make_glibc-nowrap make_linux
@@ -205,6 +216,12 @@ cc_kernel_1b_ovf: c3_docker-ckpt-cc_kernel_1b_ovf
 
 .PHONY: cc_glibc_vtag
 cc_glibc_vtag: c3_docker-ckpt-cc_glibc_vtag
+
+.PHONY: ckpt-cc_glibc_1b_ovf
+ckpt-cc_glibc_1b_ovf: $(CKPT_GLIBC_1B_OVF)
+
+.PHONY: cc_glibc_1b_ovf
+cc_glibc_1b_ovf: c3_docker-ckpt-cc_glibc_1b_ovf
 
 .PHONY: clean-checkpoints
 clean-checkpoints:

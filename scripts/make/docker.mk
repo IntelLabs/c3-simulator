@@ -29,9 +29,9 @@ DOCKER_SHA = $(shell sha256sum $(DOCKER_DOCKERFILE) | head -c16)
 DOCKER_BASE_TAG := c3_base.$(DOCKER_BASE_SHA)
 DOCKER_TAG := $(shell whoami)/c3_docker.$(DOCKER_SHA).$(DOCKER_BASE_SHA)
 
-SIMICS_ISPM ?= intel-simics-package-manager-1.8.3
+SIMICS_ISPM ?= intel-simics-package-manager-1.9.4
 SIMICS_ISPM_PKG = $(SIMICS_ISPM)-linux64.tar.gz
-SIMICS_BUNDLE_PKG ?= simics-6-packages-2024-05-linux64.ispm
+SIMICS_BUNDLE_PKG ?= simics-6-packages-2024-25-linux64.ispm
 SIMICS_PUB_URL = https://software.intel.com/content/www/us/en/develop/articles/simics-simulator.html
 SIMICS_MISSING_MESSAGE = "Please download Simics installation packages:"
 SIMICS_MISSING_MESSAGE += "\\n\\t$(SIMICS_BUNDLE_PKG)\\n\\t$(SIMICS_ISPM_PKG)"

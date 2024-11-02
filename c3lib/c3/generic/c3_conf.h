@@ -95,5 +95,8 @@ static inline T cc_ctx_get_shadow_rip(const struct cc_context *ctx) {
 #ifdef C3_X86_64
 #include "c3/x86_64/x86_64.c3_conf.h"
 #endif  // C3_X86_64
+#ifdef C3_RISC_V
+#include "c3/risc-v/risc-v.c3_conf.h"
+#endif  // C3_X86_64RISC_V
 
 #endif  // C3LIB_C3_GENERIC_C3_CONF_H_

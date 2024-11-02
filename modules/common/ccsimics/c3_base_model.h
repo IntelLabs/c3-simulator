@@ -11,7 +11,6 @@
 #include <simics/simulator/control.h>
 #include <simics/simulator/memory.h>
 #include "ccsimics/data_encryption.h"
-#include "ccsimics/shadow_rip.h"
 #include "ccsimics/simics_util.h"
 #include "c3/crypto/cc_encoding.h"
 
@@ -35,13 +34,11 @@ inline bool is_write(enum RW rw) { return rw == RW::WRITE; }
 template <typename ConnectionTy, typename CtxTy, typename PtrEncTy>
 class C3BaseModel {
     using SelfTy = C3BaseModel<ConnectionTy, CtxTy, PtrEncTy>;
-    using ShadowRipTy = ccsimics::ShadowRip<SelfTy, ConnectionTy, CtxTy>;
 
  protected:
     ConnectionTy *con_;
     CtxTy *ctx_;
     PtrEncTy *ptrenc_;
-    std::unique_ptr<ShadowRipTy> shadow_rip_;
 
     logical_address_t la_encoded_ = 0;
     logical_address_t la_decoded_ = 0;
@@ -58,9 +55,7 @@ class C3BaseModel {
 
  public:
     C3BaseModel(ConnectionTy *con, CtxTy *ctx, PtrEncTy *ptrenc)
-        : con_(con), ctx_(ctx), ptrenc_(ptrenc) {
-        shadow_rip_ = std::make_unique<ShadowRipTy>(this, con, ctx);
-    }
+        : con_(con), ctx_(ctx), ptrenc_(ptrenc) {}
 
     virtual inline ~C3BaseModel() = default;
 
@@ -86,8 +81,8 @@ class C3BaseModel {
      * @param handle
      * @return logical_address_t
      */
-    inline logical_address_t address_before(logical_address_t la,
-                                            address_handle_t *handle);
+    virtual inline logical_address_t address_before(logical_address_t la,
+                                                    address_handle_t *handle);
 
     /**
      * @brief Common data access callback
@@ -271,61 +266,66 @@ class C3BaseModel {
         this->is_encoded_pointer_ = false;
         return false;
     }
+
+    template <typename HandlerTy>
+    void register_address_before_cb(ConnectionTy *con) {
+        con_->register_address_before_cb(
+                [](auto *obj, auto *cpu, auto la, auto *handle, auto *m) {
+                    return static_cast<HandlerTy *>(m)->address_before(la,
+                                                                       handle);
+                },
+                static_cast<void *>(this));
+    }
+
+    template <typename HandlerTy>
+    void register_read_write_cb(ConnectionTy *con) {
+        if (con_->disable_data_encryption) {
+            SIM_printf("[CC] DATA ENCRYPTION DISABLED\n");
+            return;
+        }
+
+        con_->register_read_before_cb(
+                CPU_Access_Scope_Explicit,
+                [](auto *obj, auto *cpu, auto *mem, auto *m) {
+                    static_cast<HandlerTy *>(m)->modify_data_on_mem_access(
+                            mem, RW::READ);
+                },
+                static_cast<void *>(this));
+        con_->register_read_before_cb(
+                CPU_Access_Scope_Implicit,
+                [](auto *obj, auto *cpu, auto *mem, auto *m) {
+                    static_cast<HandlerTy *>(m)->modify_data_on_mem_access(
+                            mem, RW::READ);
+                },
+                static_cast<void *>(this));
+        con_->register_write_before_cb(
+                CPU_Access_Scope_Explicit,
+                [](auto *obj, auto *cpu, auto *mem, auto *m) {
+                    static_cast<HandlerTy *>(m)->modify_data_on_mem_access(
+                            mem, RW::WRITE);
+                },
+                static_cast<void *>(this));
+        con_->register_write_before_cb(
+                CPU_Access_Scope_Implicit,
+                [](auto *obj, auto *cpu, auto *mem, auto *m) {
+                    static_cast<HandlerTy *>(m)->modify_data_on_mem_access(
+                            mem, RW::WRITE);
+                },
+                static_cast<void *>(this));
+    }
 };
 
 template <typename ConnectionTy, typename CtxTy, typename PtrEncTy>
 template <typename HandlerTy>
 void C3BaseModel<ConnectionTy, CtxTy, PtrEncTy>::register_callbacks(
         ConnectionTy *con) {
-    /* Register a callback that will be called for each instruction */
-    con_->register_address_before_cb(
-            [](auto *obj, auto *cpu, auto la, auto *handle, auto *m) {
-                return static_cast<HandlerTy *>(m)->address_before(la, handle);
-            },
-            static_cast<void *>(this));
-
-    if (con_->disable_data_encryption) {
-        SIM_printf("[CC] DATA ENCRYPTION DISABLED\n");
-    }
-
-    con_->register_read_before_cb(
-            CPU_Access_Scope_Explicit,
-            [](auto *obj, auto *cpu, auto *mem, auto *m) {
-                static_cast<HandlerTy *>(m)->modify_data_on_mem_access(
-                        mem, RW::READ);
-            },
-            static_cast<void *>(this));
-    con_->register_read_before_cb(
-            CPU_Access_Scope_Implicit,
-            [](auto *obj, auto *cpu, auto *mem, auto *m) {
-                static_cast<HandlerTy *>(m)->modify_data_on_mem_access(
-                        mem, RW::READ);
-            },
-            static_cast<void *>(this));
-    con_->register_write_before_cb(
-            CPU_Access_Scope_Explicit,
-            [](auto *obj, auto *cpu, auto *mem, auto *m) {
-                static_cast<HandlerTy *>(m)->modify_data_on_mem_access(
-                        mem, RW::WRITE);
-            },
-            static_cast<void *>(this));
-    con_->register_write_before_cb(
-            CPU_Access_Scope_Implicit,
-            [](auto *obj, auto *cpu, auto *mem, auto *m) {
-                static_cast<HandlerTy *>(m)->modify_data_on_mem_access(
-                        mem, RW::WRITE);
-            },
-            static_cast<void *>(this));
-
-    shadow_rip_->register_callbacks();
+    register_address_before_cb<HandlerTy>(con);
+    register_read_write_cb<HandlerTy>(con);
 }
 
 template <typename ConnectionTy, typename CtxTy, typename PtrEncTy>
 logical_address_t C3BaseModel<ConnectionTy, CtxTy, PtrEncTy>::address_before(
         logical_address_t la, address_handle_t *handle) {
-    // Perform shadow-rip address update if needed
-    la = shadow_rip_->address_before_shim(la, handle);
-
     this->total_addr_callback_cnt_++;
     if (is_encoded_cc_ptr(la)) {
         this->is_encoded_pointer_ = true;
@@ -367,7 +367,8 @@ logical_address_t C3BaseModel<ConnectionTy, CtxTy, PtrEncTy>::address_before(
                 non_canonical_count++;
             }
         }
-        if (con_->get_page_crossing_info(handle) == Sim_Page_Crossing_First) {
+        if (handle != nullptr &&
+            con_->get_page_crossing_info(handle) == Sim_Page_Crossing_First) {
             if (debug_on()) {
                 SIM_printf("INFO: address_before: Sim_Page_Crossing_First\n");
                 SIM_printf("address_before : 0x%016lx\n", (uint64_t)la);
@@ -388,7 +389,8 @@ logical_address_t C3BaseModel<ConnectionTy, CtxTy, PtrEncTy>::address_before(
             SIM_printf("cc_la_decoded : 0x%016lx\n",
                        (uint64_t)this->la_decoded_);
         }
-        if (con_->get_page_crossing_info(handle) != Sim_Page_Crossing_Second) {
+        if (handle != nullptr &&
+            con_->get_page_crossing_info(handle) != Sim_Page_Crossing_Second) {
             SIM_printf("******** ERROR: something went wrong with cross-page "
                        "handling. Notify the owner please to fix! "
                        "*************\n");

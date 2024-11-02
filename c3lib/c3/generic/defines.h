@@ -4,9 +4,16 @@
 #ifndef C3LIB_C3_GENERIC_DEFINES_H_
 #define C3LIB_C3_GENERIC_DEFINES_H_
 
-#ifndef C3_X86_64
+#if !defined(C3_X86_64) && !defined(C3_RISC_V)
 #define C3_X86_64
-#endif  // C3_X86_64
+#endif
+
+#ifdef C3_RISC_V
+#define CC_NO_SHADOW_RIP_ENABLE
+#define CC_NO_INTEGRITY_ENABLE
+#define CC_NO_ZTS_ENABLE
+#define CC_NO_ICV_ENABLE
+#endif
 
 #ifndef _CC_GLOBALS_NO_INCLUDES_
 #include <assert.h>
@@ -19,8 +26,16 @@ typedef uint32_t u32;
 typedef uint16_t u16;
 typedef uint8_t u8;
 
+#ifndef CC_NO_SHADOW_RIP_ENABLE
 #define CC_SHADOW_RIP_ENABLE
+#endif
+
+#ifndef CC_NO_INTEGRITY_ENABLE
 #define CC_INTEGRITY_ENABLE
+#endif
+
+#ifndef CC_NO_ZTS_ENABLE
+#endif
 
 #ifndef CC_NO_ICV_ENABLE
 #define CC_ICV_ENABLE

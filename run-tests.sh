@@ -1,6 +1,5 @@
 #!/usr/bin/bash
-
-# Copyright 2024 Intel Corporation
+# Copyright 2016-2024 Intel Corporation
 # SPDX-License-Identifier: MIT
 
 set -e
@@ -29,8 +28,8 @@ fi
 # If the first argument is "fail", terminate the script
 _c3_simics_check () {
   SIMICSBASE=${sim_dir}/scripts/docker
-  SIMICSISPM=intel-simics-package-manager-1.8.3-linux64.tar.gz
-  SIMICSPKGS=simics-6-packages-2024-05-linux64.ispm
+  SIMICSISPM=intel-simics-package-manager-1.9.4-linux64.tar.gz
+  SIMICSPKGS=simics-6-packages-2024-25-linux64.ispm
   echo "Checking presence of SIMICS installation files"
   if [ ! -d $SIMICSBASE ]
   then
@@ -361,16 +360,21 @@ _c3_demo () {
 }
 
 _c3_perf_demo () {
-  if [ "${USE_ZIP_PKGS:=0}" -ne 1 ]; then
-    echo "Not supported, please see ${c3_perf_url} to run."
-    exit 1
-  fi
-  # Sanity check for extracted files
-  if [ ! -d c3-perf-simulator ]
+  # Get performance simulator from git repositories
+  PERFSIMURL=$c3_perf_url
+  PERFSIMSRC=c3-perf-simulator
+  echo "Cloning Performance Simulator into $PERFSIMSRC"
+  if [ ! -d $PERFSIMSRC ]
   then
-    echo "c3-perf-simulator directory not found"
-    echo "Did you run: $0 unzip ?"
-    exit 1
+    git clone \
+      $VERBOSITY \
+      --config advice.detachedHead=false \
+      --branch harden-may2024 \
+      --depth 1 \
+      $PERFSIMURL \
+      $PERFSIMSRC
+  else
+    echo "... skipping ($PERFSIMSRC directory already present)"
   fi
 
   # Patch shell script for performance simulator demo
@@ -436,9 +440,7 @@ then
     echo "  $0 demo edk2"
     echo "  $0 demo kernel_heap"
     echo "  $0 demo juliet"
-    if [ "${USE_ZIP_PKGS:=0}" -eq 1 ]; then
-      echo "  $0 demo performance_simulator"
-    fi
+    echo "  $0 demo performance_simulator"
     exit 1
   else
     if [[ "$2" == "perf" ]] ||

@@ -333,6 +333,19 @@ class Context {
                     return con->ctx_->set_from_attr_data(val);
                 },
                 nullptr, Sim_Attr_Optional, "d", NULL, "c3_context data");
+        SIM_register_typed_attribute(
+                cl, "cc_enabled",
+                [](auto *, auto *obj, auto *) -> attr_value_t {
+                    auto *con = reinterpret_cast<ConTy *>(SIM_object_data(obj));
+                    return SIM_make_attr_boolean(con->ctx_->cc_enabled());
+                },
+                nullptr,
+                [](auto *, auto *obj, auto *val, auto *) -> set_error_t {
+                    auto *con = reinterpret_cast<ConTy *>(SIM_object_data(obj));
+                    con->ctx_->set_cc_enabled(SIM_attr_boolean(*val));
+                    return Sim_Set_Ok;
+                },
+                nullptr, Sim_Attr_Optional, "b", NULL, "Shadow-rip enabled");
 #ifdef CC_SHADOW_RIP_ENABLE
         SIM_register_typed_attribute(
                 cl, "gsrip_enabled",

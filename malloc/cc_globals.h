@@ -8,10 +8,6 @@
 #ifndef MALLOC_CC_GLOBALS_H_
 #define MALLOC_CC_GLOBALS_H_
 
-#ifndef C3_X86_64
-#define C3_X86_64
-#endif  // C3_X86_64
-
 #include "c3/generic/c3_conf.h"
 #include "c3/generic/ca.h"
 #include "c3/generic/ciphers.h"

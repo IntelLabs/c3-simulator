@@ -17,6 +17,7 @@ extern "C" {
 #include "ccsimics/data_encryption.h"
 #include "ccsimics/integrity.h"
 #include "ccsimics/rep_movsb_tripwire.h"
+#include "ccsimics/shadow_rip.h"
 #include "ccsimics/simics_util.h"
 #include "ccsimics/stack_hardening.h"
 
@@ -24,10 +25,13 @@ namespace ccsimics {
 
 template <typename ConTy, typename CtxTy, typename PtrEncTy>
 class C3Model : public C3BaseModel<ConTy, CtxTy, PtrEncTy> {
+    using SelfTy = C3Model<ConTy, CtxTy, PtrEncTy>;
     using BaseTy = C3BaseModel<ConTy, CtxTy, PtrEncTy>;
+    using ShadowRipTy = ccsimics::ShadowRip<SelfTy, ConTy, CtxTy>;
     using IntegrityTy = ccsimics::Integrity<BaseTy, ConTy, CtxTy>;
     using RepMovsIsaTy = ccsimics::RepMovsTripwire<C3Model, ConTy, CtxTy>;
 
+    std::unique_ptr<ShadowRipTy> shadow_rip_;
     std::unique_ptr<RepMovsIsaTy> rep_movs_;
     std::unique_ptr<IntegrityTy> integrity_;
     std::unique_ptr<ccsimics::StackHardening> stack_ = nullptr;
@@ -35,8 +39,9 @@ class C3Model : public C3BaseModel<ConTy, CtxTy, PtrEncTy> {
  public:
     C3Model(ConTy *con, CtxTy *ctx, PtrEncTy *ptrenc)
         : C3BaseModel<ConTy, CtxTy, PtrEncTy>(con, ctx, ptrenc) {
-        rep_movs_ = std::make_unique<RepMovsIsaTy>(this, con, ctx);
+        shadow_rip_ = std::make_unique<ShadowRipTy>(this, con, ctx);
         integrity_ = std::make_unique<IntegrityTy>(this, con, ctx);
+        rep_movs_ = std::make_unique<RepMovsIsaTy>(this, con, ctx);
         set_stack_hardening(con->stack_hardening);
     }
 
@@ -48,6 +53,13 @@ class C3Model : public C3BaseModel<ConTy, CtxTy, PtrEncTy> {
     template <typename HandlerTy> inline void register_callbacks(ConTy *con) {
         BaseTy::template register_callbacks<HandlerTy>(con);
         rep_movs_->register_callbacks();
+        shadow_rip_->register_callbacks();
+    }
+
+    logical_address_t address_before(logical_address_t la,
+                                     address_handle_t *handle) override {
+        la = shadow_rip_->address_before_shim(la, handle);
+        return BaseTy::address_before(la, handle);
     }
 
     inline uint64_t encrypt_decrypt_u64(const uint64_t tweak,
