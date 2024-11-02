@@ -14,9 +14,9 @@ ARG NASM_REL=nasm-2.15.05
 
 # The Simics versions are overridden in scripts/make/docker.mk
 ARG SIMICS_INSTALL_DIR=/opt/simics/simics-6
-ARG SIMICS_ISPM="intel-simics-package-manager-1.8.3"
+ARG SIMICS_ISPM="intel-simics-package-manager-1.9.4"
 ARG SIMICS_ISPM_PKG="${SIMICS_ISPM}-linux64.tar.gz"
-ARG SIMICS_BUNDLE_PKG="simics-6-packages-2024-05-linux64.ispm"
+ARG SIMICS_BUNDLE_PKG="simics-6-packages-2024-25-linux64.ispm"
 
 ARG MBUILD_GIT_URL="https://github.com/intelxed/mbuild.git"
 ARG MBUILD_GIT_TAG="v2022.07.28"
@@ -86,7 +86,8 @@ COPY ${SIMICS_BUNDLE_PKG} ${C3_USER_HOME}
 COPY ${SIMICS_ISPM_PKG} ${C3_USER_HOME}
 RUN mkdir -p /opt/simics/ispm && pushd /opt/simics/ispm && \
     tar xzf ${C3_USER_HOME}/$SIMICS_ISPM_PKG && \
-    /opt/simics/ispm/$SIMICS_ISPM/ispm -y packages \
+    /opt/simics/ispm/$SIMICS_ISPM/ispm packages \
+            --non-interactive \
             --trust-insecure-packages \
             --install-bundle ${C3_USER_HOME}/$SIMICS_BUNDLE_PKG \
             --install-dir $SIMICS_INSTALL_DIR && \

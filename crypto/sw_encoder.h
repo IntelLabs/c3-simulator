@@ -4,8 +4,6 @@
 #ifndef CRYPTO_SW_ENCODER_H_
 #define CRYPTO_SW_ENCODER_H_
 
-#include "../malloc/cc_globals.h"
-
 #if defined(__cplusplus)
 
 #include <stdarg.h>
@@ -133,6 +131,12 @@ class SWEncoder {
         return new_ptr;
     }
 
+    template <typename T>
+    T *encode_ptr(const T *p, const uint64_t s, const uint64_t v) {
+        return reinterpret_cast<T *>(
+                encode_ptr(reinterpret_cast<uint64_t>(p), s, v));
+    }
+
     bool encrypt_decrypt_bytes(const uint64_t ca, uint8_t *buf, size_t len) {
         if (!is_encoded_cc_ptr(ca)) {
             return false;
@@ -158,8 +162,8 @@ class SWEncoder {
     uint8_t c3_ptr_key[kC3PtrKeySize];
     uint8_t c3_data_key[kC3DataKeySize];
 
-    std::shared_ptr<CCPointerEncoding> ptrenc;
     std::shared_ptr<CCDataEncryption> dataenc;
+    std::shared_ptr<CCPointerEncoding> ptrenc;
 };
 
 };  // namespace c3_support

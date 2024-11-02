@@ -1,10 +1,9 @@
-/*
- Copyright 2021 Intel Corporation
- SPDX-License-Identifier: MIT
-*/
+// Copyright 2021-2024 Intel Corporation
+// SPDX-License-Identifier: MIT
 
-#ifndef LIM_PTR_ENCODING_H
-#define LIM_PTR_ENCODING_H
+#ifndef MALLOC_LIM_PTR_ENCODING_H_
+#define MALLOC_LIM_PTR_ENCODING_H_
+
 #include <assert.h>
 #include <malloc.h>
 #include <stdint.h>
@@ -16,7 +15,7 @@ extern int trace_only;
 
 #define HEAP_MIN_CHUNK_SZ 24
 
-//#define LIM_METADATA_OFFSET_FROM_MIDDLE 0
+// #define LIM_METADATA_OFFSET_FROM_MIDDLE 0
 
 #define LIM_METADATA_SIZE_32_64B 1
 #define LIM_METADATA_OFFSET_FROM_MIDDLE_32_64B 0
@@ -446,4 +445,4 @@ lim_compute_disp_base(uintptr_t meta_la, size_t meta_size,
            1;
 }
 
-#endif
+#endif  // MALLOC_LIM_PTR_ENCODING_H_

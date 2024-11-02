@@ -10,11 +10,11 @@ ifdef::env-github[]
 endif::[]
 :source-highlighter: pygments
 :source-language: bash
-:ispm-base: intel-simics-package-manager-1.8.3
-:ispm-base-stem: intel-simics-package-manager-1.8.3-linux64
-:simics-base: /opt/simics/simics-6.0.185
-:simics-pkg-ver: 2024.05
-:simics-pkg-ver-stem: simics-6-packages-2024-05-linux64
+:ispm-base: intel-simics-package-manager-1.9.4
+:ispm-base-stem: intel-simics-package-manager-1.9.4-linux64
+:simics-base: /opt/simics/simics-6.0.198
+:simics-pkg-ver: 2024.25
+:simics-pkg-ver-stem: simics-6-packages-2024-25-linux64
 :simics-repo-url: https://github.com/IntelLabs/c3-simulator.git
 :simics-public-url: https://software.intel.com/content/www/us/en/develop/articles/simics-simulator.html
 :CKPT_NOKERNEL_BASE: /opt/simics/checkpoints/glibc_latest.ckpt
@@ -104,6 +104,19 @@ version used by the Docker container, and install other dependencies (See
 make simics_setup SIMICS_BIN=[CUSTOM_SIMICS_PATH]
 ----
 
+=== Quick-start: C3 gem5-based performance simulator
+
+To run the gem5 you can run:
+
+[source,subs=attributes]
+----
+./run-tests.sh demo performance_simulator
+----
+
+See
+link:https://github.com/IntelLabs/c3-perf-simulator[github.com/IntelLabs/c3-perf-simulator]
+for more details and the related source code.
+
 === Quick-start: C3 protected user-space applications
 
 Once you have configured the project for use with Docker, you can use the
@@ -140,16 +153,6 @@ To build and run C3-hardened Linux kernel, run:
 
 [source,subs=attributes]
 ----
-# Setup buildroot and prepare Buildroot build
-make c3_docker-linux_buildroot_setup
-make c3_docker-linux_buildroot_prepare
-# Build Buildroot system (may take >1h)
-make c3_docker-linux_buildroot_build
-
-# Run Buildroot system with C3 enabled on Simics
-make c3_docker-linux_buildroot_run
-
-# The  following command also combines all the steps:
 make c3_docker-linux_buildroot
 ----
 
@@ -164,11 +167,11 @@ C3-hardened EDK2:
 
 [source,subs=attributes]
 ----
-# Building EDK2 (note this will take >1h the first time)
+# Build and run EDK2 (note this will take >1h the first time)
 make edk2_all
-
-# Boot EDK2
 make edk2_run
+# or:
+./run-tests.sh demo edk2
 ----
 
 See <<C3 protected EDK2>> for more details.
@@ -373,6 +376,14 @@ make c3_docker-demo-juliet-c3-heap
 make c3_docker-demo-juliet-c3-heap-align
 # C3-protected stack
 make c3_docker-demo-juliet-c3-stack
+----
+
+Alternatively, you can run all the Juliet tests with:
+[source,subs=attributes]
+----
+# Run all Juliet tests with run-tests.sh:
+./run-tests.sh build
+./run-tests.sh demo juliet
 ----
 
 NOTE: To run the juliet-c3-heap-align case, you need to prepare a checkpoint

@@ -35,6 +35,16 @@ make_glibc-nowrap:
 .PHONY: make_glibc-nowrap
 glibc-nowrap: c3_docker-make_glibc-nowrap
 
+# glibc-shim-detect-1b-ovf
+
+.PHONY: make_glibc-shim-detect-1b-ovf
+make_glibc-shim-detect-1b-ovf:
+	$(info === Build $@)
+	+ CC_USE_SYSCALL_SHIMS=1 CC_DETECT_1B_OVF=1 ./glibc/make_glibc.sh
+
+.PHONY: glibc-shim-detect-1b-ovf
+glibc-shim-detect-1b-ovf: c3_docker-glibc-shim-detect-1b-ovf
+
 # glibc- noshim-detect-1b-ovf
 
 .PHONY: make_glibc-noshim-detect-1b-ovf

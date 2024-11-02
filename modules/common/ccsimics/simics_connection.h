@@ -346,6 +346,12 @@ class SimicsConnection {
         return pa_block;
     }
 
+    uint64_t read_reg(int num) { return ir_iface->read(cpu_, num); }
+
+    void write_reg(int reg_num, uint64_t value) {
+        ir_iface->write(cpu_, reg_num, value);
+    }
+
     /**
      * @brief Write 64-bit value to linear address
      *

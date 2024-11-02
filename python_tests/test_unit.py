@@ -5,15 +5,15 @@ import pytest
 import os
 import re
 import sys
-from python_tests.common import SimicsInstance, lim_models, stack_models, \
-                                heap_models, default_models
+from python_tests.common import SimicsInstance, get_active_models, \
+                                get_model_match_list, add_common_simics_args, \
+                                cleanup_simics_model_name
 
 # Debug the c3_test_case class
 DEBUG_C3_TEST_CASE = False
 DEBUG_TEST_RUNNER = False
 
-TEST_HEADER_TRUE_VALUES = [ "yes", "Yes", "true", 1 ]
-
+TEST_HEADER_TRUE_VALUES = ["yes", "Yes", "true", 1]
 """ Test header labels
 
 The test header labels are put into the test source files themselves and will
@@ -42,30 +42,32 @@ simics_args
 slow
     If set to yes, then the test is skipped when running with --skip-slow
 """
-TEST_HEADER_LABELS = ["envp", "ld_flags", "should_fail", "cxx_flags", "model",
-                      "nomodel", "xfail", "need_libunwind", "need_kernel",
-                      "no_kernel", "simics_args", "slow"]
+TEST_HEADER_LABELS = [
+    "envp", "ld_flags", "should_fail", "cxx_flags", "model", "nomodel",
+    "xfail", "need_libunwind", "need_kernel", "no_kernel", "simics_args",
+    "slow"
+]
 
-gtest_script 			= "unit_tests/runtest_common.simics"
-generic_script          = "scripts/runworkload_common.simics"
+gtest_script = "unit_tests/runtest_common.simics"
+generic_script = "scripts/runworkload_common.simics"
 src_path = "unit_tests/"
 
 slow_tests = [
-    "malloc_test.cpp",
-    "wcstring_test.cpp",
-    "wcstring_test1.cpp",
-    "wcstring_test2.cpp",
-    "string_test1.cpp",
-    "string_test2.cpp",
-    "string_test3.cpp",
-    "string_test4.cpp"
+    "malloc_test.cpp", "wcstring_test.cpp", "wcstring_test1.cpp",
+    "wcstring_test2.cpp", "string_test1.cpp", "string_test2.cpp",
+    "string_test3.cpp", "string_test4.cpp"
 ]
+
+# Populated in pytest_generate_tests
+test_files = {}
 
 def dbgprint(*args):
     if DEBUG_TEST_RUNNER:
         print(*args, file=sys.stderr)
 
+
 class c3_test_case:
+
     def __init__(self, filename):
         self.filename = filename
         self.header = {}
@@ -134,11 +136,14 @@ class c3_test_case:
         if re.match(r, str):
             return True
 
-        r = (r".*[\s|,]?\s*" + re.escape(model.replace("-integrity-intra", "")) + r"\s*(?:[\s|,].*)?$")
+        r = (r".*[\s|,]?\s*" +
+             re.escape(model.replace("-integrity-intra", "")) +
+             r"\s*(?:[\s|,].*)?$")
         if re.match(r, str):
             return True
 
-        r = (r".*[\s|,]?\s*" + re.escape(model.replace("-integrity", "")) + r"\s*(?:[\s|,].*)?$")
+        r = (r".*[\s|,]?\s*" + re.escape(model.replace("-integrity", "")) +
+             r"\s*(?:[\s|,].*)?$")
         if re.match(r, str):
             return True
 
@@ -151,7 +156,8 @@ class c3_test_case:
                 return True
             if (len(model_split) > 2):
                 submodel = f"{submodel}-{model_split[2]}"
-                r = (r".*[\s|,]?\s*" + re.escape(submodel) + r"\s*(?:[\s|,].*)?$")
+                r = (r".*[\s|,]?\s*" + re.escape(submodel) +
+                     r"\s*(?:[\s|,].*)?$")
                 if re.match(r, str):
                     return True
 
@@ -180,7 +186,7 @@ class c3_test_case:
                 found_header = True
             elif re.match('^\s*$', line):
                 self.dbgprint("===     Ignoring empty line")
-                continue;
+                continue
             elif found_header:
                 self.dbgprint("=== <<< Found header section end")
                 break
@@ -209,32 +215,18 @@ class c3_test_case:
 def skip_slow(request):
     return request.config.getoption("--skip-slow")
 
+
 def has_libunwind(request):
     return request.config.getoption("--libunwind")
+
 
 def has_kernel(request):
     return request.config.getoption("--have-kernel")
 
-def get_unwind_args(request):
-    if has_libunwind(request):
-        return [ "unwinder=llvm_libunwind" ]
-    return [ "unwinder=default_unwinder" ]
-
-def get_model_match_list(model):
-    model_labels = [ "*", model ]
-    if model in heap_models:
-        model_labels.append("cc")
-# #ifdef CC_ZTS_ENABLE
-    if model.endswith("-zts"):
-        model_labels.append("zts")
-# #endif  // CC_ZTS_ENABLE
-    if model in lim_models:
-        model_labels.append("lim")
-    return model_labels
 
 def get_include_file(src_file):
     assert src_file.endswith(".cpp")
-    files = [ ]
+    files = []
 
     if os.path.exists(os.path.join(os.path.dirname(src_file), "common.h")):
         files.append("common.h")
@@ -245,6 +237,7 @@ def get_include_file(src_file):
             files.append(nofp_file)
 
     return "include_file=\"" + " ".join(files) + "\""
+
 
 def get_obj_files(request, testcase, model):
     """Get obj_files Simics arg"""
@@ -257,19 +250,23 @@ def get_obj_files(request, testcase, model):
         obj_files += " /usr/lib/x86_64-linux-gnu/libgtest.a"
     return obj_files
 
+
 def get_env_vars(request, testcase, model):
-    return testcase.get_and_append("envp",
-        "LD_LIBRARY_PATH=/home/simics/glibc/glibc-2.30_install/lib")
+    return testcase.get_and_append(
+        "envp", "LD_LIBRARY_PATH=/home/simics/glibc/glibc-2.30_install/lib")
+
 
 def get_ld_flags(request, testcase, model):
     return testcase.get_and_append("ld_flags", "")
 
+
 def get_should_fail(request, testcase, model):
     return testcase.get_and_append("should_fail", "")
 
+
 def get_cxx_flags(request, testcase, model):
     # Add some common flags
-    cxx_flags = [ "-DC3_MODEL={}".format(model), "-Iinclude" ]
+    cxx_flags = ["-DC3_MODEL={}".format(model), "-Iinclude"]
     if has_libunwind(request):
         cxx_flags.append("-ldl -pthread")
 
@@ -283,14 +280,16 @@ def get_cxx_flags(request, testcase, model):
     # only if they were not already specified in testcase headers
     if model == "cc-integrity-intra":
         if not "-fuse-ld=lld" in cxx_flags:
-            cxx_flags = " ".join([ cxx_flags, "-fuse-ld=lld" ])
+            cxx_flags = " ".join([cxx_flags, "-fuse-ld=lld"])
         # NOTE: this checks for the generic argument, allowing
         # the test header to take priority if the mode is relevant
         # e.g., -finsert-intraobject-tripwires={all,attr,none}
         if not "-finsert-intraobject-tripwires" in cxx_flags:
-            cxx_flags = " ".join([ cxx_flags, "-finsert-intraobject-tripwires=all" ])
+            cxx_flags = " ".join(
+                [cxx_flags, "-finsert-intraobject-tripwires=all"])
 
     return cxx_flags
+
 
 def do_skip(request, testcase, model):
     """Check test file too see if it matches current run, otherwise skip"""
@@ -319,22 +318,27 @@ def do_skip(request, testcase, model):
         return True
 
     # Skip if need but don't have libunwind
-    if not has_libunwind(request) and testcase.get_bool("need_libunwind", False):
+    if not has_libunwind(request) and testcase.get_bool(
+            "need_libunwind", False):
         pytest.skip(f"skipping {testcase}, requires libunwind")
         return True
 
     # Skip if explicitly excluded
     for l in get_model_match_list(model):
         if testcase.has_model("nomodel", l):
-            pytest.skip(f"skipping {testcase}, test explicitly disabled for {l} (⊆ {model})")
+            pytest.skip(
+                f"skipping {testcase}, test explicitly disabled for {l} (⊆ {model})"
+            )
             return True
 
     # Intra-object tests currently require kernel checkpoint
     if model.endswith("-integrity-intra") and not has_kernel(request):
-        pytest.skip(f"skipping {testcase}, intra-object tests on non C3-kernel")
+        pytest.skip(
+            f"skipping {testcase}, intra-object tests on non C3-kernel")
         return True
 
     return False
+
 
 def do_xfail(testcase, model):
     for l in get_model_match_list(model):
@@ -343,35 +347,9 @@ def do_xfail(testcase, model):
             return True
     return False
 
-def module_dir(model):
-    base_model = model.split("-", 1)[0]
-    return "modules/{}_model".format(base_model)
-
-def get_active_models(metafunc):
-    models = [ ]
-
-    if metafunc.config.getoption("model"):
-        # use models from options if provided
-        models.extend(metafunc.config.getoption("model"))
-    else:
-        # Otherwise check the modules folders for any of the default_models
-        models = filter(lambda m: os.path.exists(
-            module_dir(m)), default_models)
-
-    # Filter out models in nomodel
-    if metafunc.config.getoption("nomodel"):
-        nomodel = metafunc.config.getoption("nomodel")
-        models = filter(
-            # Keep only models that cannot be matched with the nomodel list
-            lambda m: not len(set(get_model_match_list(m)).intersection(set(nomodel))),
-            models)
-
-    return models
-
-testfiles = {}
 
 def pytest_generate_tests(metafunc):
-    self_test()
+    global test_files
 
     # Scan through all the source files under src_path
     for root, dirs, files in os.walk(src_path):
@@ -382,17 +360,20 @@ def pytest_generate_tests(metafunc):
                 testcase.read()
                 # Just include files that include any model
                 if testcase.get("model") != None:
-                    testfiles[testcase.filename] = testcase
+                    test_files[testcase.filename] = testcase
 
-    dbgprint(f"Found {len(testfiles.keys())} test testfiles")
+    dbgprint(f"Found {len(test_files.keys())} test in test_files")
 
     if "src_file" in metafunc.fixturenames:
-        metafunc.parametrize("src_file", testfiles.keys())
+        metafunc.parametrize("src_file", test_files.keys())
+
     if "model" in metafunc.fixturenames:
         metafunc.parametrize("model", get_active_models(metafunc))
 
+
 def test_rungtest(checkpoint, src_file, model, request):
-    testcase = testfiles[src_file]
+    global test_files
+    testcase = test_files[src_file]
     # Do skip or xfail if needed
     dbgprint(f">>>>> Model: {model}, Testcase: {testcase}")
     if not do_skip(request, testcase, model):
@@ -410,56 +391,26 @@ def test_rungtest(checkpoint, src_file, model, request):
         "include_folders=\"unit_tests/include/unit_tests c3lib/c3\"",
     ]
 
-    if request.config.getoption("--no-upload"):
-        other_args.append("no_upload=TRUE")
-
     other_args.append("src_file=" + testcase.filename)
 
     other_args.extend(testcase.get_split("simics_args", " "))
 
+    # Add common other_args, including from cmdline options and pseudo-models
+    other_args = add_common_simics_args(other_args, request, model)
 
-
-    if model.endswith("-castack"):
-        model = model.replace('-castack', '')
-        if not "enable_cc_castack=1" in other_args:
-            other_args.append("enable_cc_castack=TRUE")
-
-    if model.endswith("-integrity"):
-        model = model.replace('-integrity', '')
-        if not "enable_integrity=TRUE" in other_args:
-            other_args.append("enable_integrity=TRUE")
-
-    if model.endswith("-integrity-intra"):
-        model = model.replace('-integrity-intra', '')
-        if not "enable_integrity=TRUE" in other_args:
-            other_args.append("enable_integrity=TRUE")
-
-        # always add compiler
-        other_args.append("compiler=/home/simics/llvm/llvm_install/bin/clang++")
-
-    if model.endswith("-nowrap"):
-        model = model.replace('-nowrap', '')
-        if not "enable_cc_nowrap=1" in other_args:
-            other_args.append("enable_cc_nowrap=TRUE")
-            other_args.append("disable_cc_env=TRUE")
-
-    if model == "lim-trace":
-        model = "lim_disp"
-        other_args.append("trace_only=TRUE")
-
-    other_args.extend(get_unwind_args(request))
+    # Remove any -integrity or other suffixes from model
+    model = cleanup_simics_model_name(model)
 
     other_args.append(get_include_file(testcase.filename))
 
-    if request.config.getoption("--upload-glibc"):
-        other_args.append("upload_glibc=TRUE")
-
     test_inst = SimicsInstance(gtest_script, checkpoint, model, other_args)
     proc = test_inst.run(request)
+
     if (get_should_fail(request, testcase, model)):
         assert proc.returncode != 0, test_inst.dump_proc(proc)
     else:
         assert proc.returncode == 0, test_inst.dump_proc(proc)
+
 
 def self_test():
     dbgprint("Running self_test")
