@@ -84,6 +84,10 @@ mrproper:: buildroot-distclean
 
 .PHONY: run
 run:
+	$(project_dir)/simics -no-gui --no-win $(project_dir)/scripts/riscv_common.simics
+
+.PHONY: run-gui
+run-gui:
 	$(project_dir)/simics $(project_dir)/scripts/riscv_common.simics
 
 .PHONY: ssh
