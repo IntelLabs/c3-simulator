@@ -1,0 +1,64 @@
+# Copyright 2016-2025 Intel Corporation
+# SPDX-License-Identifier: MIT
+
+decl {
+    param br_images : string = "%simics%/risc-v/buildroot/output/images"
+    ! Path to the Buildroot built images
+    param magic : bool = TRUE
+    ! Enable MAGIC breakpoints
+    param enable_on_magic : bool = FALSE
+    ! Enable C3 on MAGIC breakpoint (also enables MAGIC breakpoints)
+    param debug_on : bool = TRUE
+    ! Set the debug_on attribute for the C3 module (after boot)
+}
+
+output-radix 16
+
+# Load the RISC-V Simics target
+(load-target target = "risc-v-simple/linux"
+    machine:software:firmware:bl_image = "%s/fw_jump.elf" % $br_images
+    machine:software:linux:kernel_image = "%s/Image" % $br_images
+    machine:software:linux:rootfs_disk_image = "%s/rootfs.ext2" % $br_images
+)
+
+echo "=== Loading C3 RISC-V model"
+$model = (new-riscv-c3-model -connect-all)
+
+foreach $c in (range (board->num_cores)) {
+    $con = "%s_%d" % [$model, $c]
+    echo "=== Configuring C3 for core %d (%s)" % [$c, $con]
+    $con->cc_enabled = FALSE
+    $con->debug_on = FALSE
+}
+
+echo "=== Enabling networking and connecting to real network"
+connect-real-network target-ip = 10.10.0.100
+
+if $enable_on_magic or $magic {
+    echo "=== Enabling MAGIC breakpoints"
+    bp.magic.break
+}
+
+script-branch "Start networking before Linux login" {
+    if $enable_on_magic {
+        echo "=== Waiting for MAGIC to enable C3"
+        bp.magic.wait-for
+        foreach $c in (range (board->num_cores)) {
+            $con = "%s_%d" % [$model, $c]
+            echo "=== Enabling C3 for core %d (%s)" % [$c, $con]
+            $con->cc_enabled = TRUE
+            $con->debug_on = $debug_on
+        }
+    } else {
+        board.console.con.bp-wait-for-console-string "Welcome to Buildroot"
+        foreach $c in (range (board->num_cores)) {
+            $con = "%s_%d" % [$model, $c]
+            echo "=== Enabling C3 for core %d (%s)" % [$c, $con]
+            $con->cc_enabled = TRUE
+            $con->debug_on = $debug_on
+        }
+
+    }
+}
+
+run
