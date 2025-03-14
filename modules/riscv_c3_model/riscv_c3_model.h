@@ -1,4 +1,4 @@
-// Copyright 2016-2024 Intel Corporation
+// Copyright 2024-2025 Intel Corporation
 // SPDX-License-Identifier: MIT
 
 #ifndef MODULES_RISCV_C3_MODEL_RISCV_C3_MODEL_H_
@@ -23,6 +23,7 @@ class RiscvC3Model : public C3BaseModel<ConTy, CtxTy, PtrEncTy> {
     using BaseTy = C3BaseModel<ConTy, CtxTy, PtrEncTy>;
 
     bool need_fixup = false;
+    bool exception_fixup_only = false;
     uint32_t fixup_reg_num = 0;
     uint64_t fixup_reg_val = 0;
 
@@ -119,6 +120,9 @@ class RiscvC3Model : public C3BaseModel<ConTy, CtxTy, PtrEncTy> {
         // Extract register number of the pointer operand (bits 15-19 for rs1)
         uint32_t reg_num = (instruction >> 15) & 0x1F;
 
+        // Extract register number of the destination operand (bits 7-11 for rd)
+        uint32_t dst_reg_num = (instruction >> 7) & 0x1F;
+
         // Read the address and use address_before do decode
         uint64_t addr = this->con_->read_reg(reg_num);
         uint64_t addr_enc = this->address_before(addr, nullptr);
@@ -139,18 +143,26 @@ class RiscvC3Model : public C3BaseModel<ConTy, CtxTy, PtrEncTy> {
             need_fixup = true;
             fixup_reg_num = reg_num;
             fixup_reg_val = addr;
+            // If out and dst reg are the same, we only fixup on exception
+            exception_fixup_only = (dst_reg_num == reg_num);
         }
     }
 
-    inline void exception_before_cb(exception_handle_t *) { restore_fixup(); }
+    inline void exception_before_cb(exception_handle_t *) {
+        restore_fixup(true);
+    }
 
     inline void instruction_after_cb(instruction_handle_t *) {
-        restore_fixup();
+        restore_fixup(false);
     }
 
  protected:
-    inline void restore_fixup() {
+    inline void restore_fixup(bool is_exception) {
         if (!need_fixup || !this->ctx_->cc_enabled()) {
+            return;
+        }
+
+        if (!is_exception && exception_fixup_only) {
             return;
         }
 

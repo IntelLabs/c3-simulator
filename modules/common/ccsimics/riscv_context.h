@@ -1,4 +1,4 @@
-// Copyright 2016-2024 Intel Corporation
+// Copyright 2024-2025 Intel Corporation
 // SPDX-License-Identifier: MIT
 
 #ifndef MODULES_COMMON_CCSIMICS_RISCV_CONTEXT_H_

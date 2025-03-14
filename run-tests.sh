@@ -1,5 +1,5 @@
 #!/usr/bin/bash
-# Copyright 2016-2024 Intel Corporation
+# Copyright 2024-2025 Intel Corporation
 # SPDX-License-Identifier: MIT
 
 set -e
@@ -28,8 +28,8 @@ fi
 # If the first argument is "fail", terminate the script
 _c3_simics_check () {
   SIMICSBASE=${sim_dir}/scripts/docker
-  SIMICSISPM=intel-simics-package-manager-1.9.4-linux64.tar.gz
-  SIMICSPKGS=simics-6-packages-2024-25-linux64.ispm
+  SIMICSISPM="$(grep '^:ispm-base:'  README.adoc | awk '{print $2}')-linux64.tar.gz"
+  SIMICSPKGS="$(grep '^:simics-pkg-ver-stem:' README.adoc | awk '{print $2}').ispm"
   echo "Checking presence of SIMICS installation files"
   if [ ! -d $SIMICSBASE ]
   then

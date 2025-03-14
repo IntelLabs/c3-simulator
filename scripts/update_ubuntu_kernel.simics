@@ -1,4 +1,4 @@
-# Copyright 2021-2024 Intel Corporation
+# Copyright 2021-2025 Intel Corporation
 # SPDX-License-Identifier: MIT
 
 decl {
@@ -117,7 +117,6 @@ $branch_id = (script-branch "workload" {
 		@command_to_console("mkdir -p include")
 		@command_to_console("ln -s /home/simics/unit_tests/include/unit_tests include/unit_tests")
 	}
-
 
 	#using virtiofs
 	load-module virtio-comp

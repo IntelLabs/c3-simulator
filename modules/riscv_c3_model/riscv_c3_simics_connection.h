@@ -1,4 +1,4 @@
-// Copyright 2016-2024 Intel Corporation
+// Copyright 2016-2025 Intel Corporation
 // SPDX-License-Identifier: MIT
 
 #ifndef MODULES_RISCV_C3_MODEL_RISCV_C3_SIMICS_CONNECTION_H_

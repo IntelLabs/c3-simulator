@@ -1,9 +1,17 @@
-# Copyright 2023-2024 Intel Corporation
+# Copyright 2023-2025 Intel Corporation
 # SPDX-License-Identifier: MIT
 
 include $(project_dir)/scripts/make/xed.mk
 
-SIMICS_BIN ?= /opt/simics/simics-6/simics-latest/bin
+ifneq ("$(wildcard $(project_dir))/README.adoc","")
+# Set SIMICS_BASE from README.adoc if it exists
+SIMICS_BASE ?= $(shell grep "^:simics-base:" $(project_dir)/README.adoc | awk '{print $$2}')
+else
+# Otherwise set SIMICS_BASE to the default simics-latest symlink
+SIMICS_BASE ?= /opt/simics/simics-6/simics-latest
+endif
+
+SIMICS_BIN ?= $(SIMICS_BASE)/bin
 
 PATCHELF_PKG = patchelf-0.10.tar.gz
 PATCHELF_URL = https://codeload.github.com/NixOS/patchelf/tar.gz/refs/tags/0.10

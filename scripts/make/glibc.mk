@@ -1,4 +1,4 @@
-# Copyright 2022-2024 Intel Corporation
+# Copyright 2022-2025 Intel Corporation
 # SPDX-License-Identifier: MIT
 
 # glibc-noshim
@@ -54,7 +54,6 @@ make_glibc-noshim-detect-1b-ovf:
 
 .PHONY: glibc-noshim-detect-1b-ovf
 glibc-noshim-detect-1b-ovf: c3_docker-glibc-noshim-detect-1b-ovf
-
 
 mrproper::
 	rm -rf glibc/glibc-2.30_build glibc/glibc-2.30_install

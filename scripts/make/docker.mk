@@ -1,4 +1,4 @@
-# Copyright 2024 Intel Corporation
+# Copyright 2024-2025 Intel Corporation
 # SPDX-License-Identifier: MIT
 
 workdir = /c3_workdir
@@ -29,9 +29,9 @@ DOCKER_SHA = $(shell sha256sum $(DOCKER_DOCKERFILE) | head -c16)
 DOCKER_BASE_TAG := c3_base.$(DOCKER_BASE_SHA)
 DOCKER_TAG := $(shell whoami)/c3_docker.$(DOCKER_SHA).$(DOCKER_BASE_SHA)
 
-SIMICS_ISPM ?= intel-simics-package-manager-1.9.4
+SIMICS_ISPM ?= $(shell grep "^:ispm-base:" $(project_dir)/README.adoc | awk '{print $$2}')
 SIMICS_ISPM_PKG = $(SIMICS_ISPM)-linux64.tar.gz
-SIMICS_BUNDLE_PKG ?= simics-6-packages-2024-25-linux64.ispm
+SIMICS_BUNDLE_PKG ?= $(shell grep '^:simics-pkg-ver-stem:' $(project_dir)/README.adoc | awk '{print $$2}').ispm
 SIMICS_PUB_URL = https://software.intel.com/content/www/us/en/develop/articles/simics-simulator.html
 SIMICS_MISSING_MESSAGE = "Please download Simics installation packages:"
 SIMICS_MISSING_MESSAGE += "\\n\\t$(SIMICS_BUNDLE_PKG)\\n\\t$(SIMICS_ISPM_PKG)"
@@ -39,6 +39,7 @@ SIMICS_MISSING_MESSAGE += "\\nto scripts/docker."
 SIMICS_MISSING_MESSAGE += "\\n\\nPublic Simics release can be found at $(SIMICS_PUB_URL)\\n"
 
 # Base stuff
+DOCKER_ARGS += --mount type=bind,source="$(project_dir)/README.adoc",target="$(workdir)/README.adoc",readonly
 DOCKER_ARGS += --mount type=bind,source="$(project_dir)/malloc",target="$(workdir)/malloc",readonly
 DOCKER_ARGS += --mount type=bind,source="$(project_dir)/crypto",target="$(workdir)/crypto",readonly
 DOCKER_ARGS += --mount type=bind,source="$(project_dir)/scripts",target="$(workdir)/scripts",readonly
@@ -49,19 +50,19 @@ DOCKER_ARGS += --mount type=bind,source="$(project_dir)/microbenchmarks",target=
 DOCKER_ARGS += --mount type=bind,source="$(project_dir)/config-user.mk",target="$(workdir)/config-user.mk",readonly
 
 # Share the Buildroot ccache folder with the container
-ifneq ($(wildcard ${HOME}/.c3-buildroot-ccache),)
+ifeq ($(shell [ -e ${HOME}/.c3-buildroot-ccache ] && echo 1),1)
 DOCKER_ARGS += --mount type=bind,source="${HOME}/.c3-buildroot-ccache",target="$(docker_home)/.c3-buildroot-ccache"
 endif
 # Share common Buildroot toolchain, it it exists
-ifneq ($(wildcard /opt/simics/buildroot_toolchains/*),)
+ifeq ($(shell [ -e /opt/simics/buildroot_toolchains ] && echo 1),1)
 DOCKER_ARGS += --mount type=bind,source="/opt/simics/buildroot_toolchains",target="/opt/simics/buildroot_toolchains",readonly
 endif
 # Share the LLVM ccache folder if it exists
-ifneq ($(wildcard ${HOME}/.c3-llvm-ccache),)
+ifeq ($(shell [ -e ${HOME}/.c3-llvm-ccache ] && echo 1),1)
 DOCKER_ARGS += --mount type=bind,source="${HOME}/.c3-llvm-ccache",target="$(docker_home)/.c3-llvm-ccache"
 endif
 # Share the Linux kernel ccache folder if it exists
-ifneq ($(wildcard ${HOME}/.c3-linux-ccache),)
+ifeq ($(shell [ -e ${HOME}/.c3-linux-ccache ] && echo 1),1)
 DOCKER_ARGS += --mount type=bind,source="${HOME}/.c3-linux-ccache",target="$(docker_home)/.c3-linux-ccache"
 endif
 
@@ -133,7 +134,6 @@ c3_docker::
 	mkdir -p edk2_src/edk2_buildroot
 	mkdir -p buildroot
 endif
-
 
 ifdef INTERACTIVE
 DOCKER_ARGS += -it
