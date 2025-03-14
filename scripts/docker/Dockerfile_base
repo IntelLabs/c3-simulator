@@ -170,6 +170,7 @@ RUN mkdir -p lib/gcc12 && \
 	./configure \
         --prefix=/opt/simics/GCC-12.2.0 \
         --enable-languages=c,c++ \
+        --disable-default-pie \
 		--disable-multilib && \
     make -j$(nproc) && \
     make -j$(nproc) install && \
