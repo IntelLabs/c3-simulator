@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Copyright 2024 Intel Corporation
+# Copyright 2024-2025 Intel Corporation
 # SPDX-License-Identifier: MIT
 
 
@@ -134,7 +134,7 @@ parse_args() {
                 gdb_port="$2"
                 shift ; shift ;;
             --net)
-                connect_real_network=1
+                connect_real_network=TRUE
                 shift ;;
             -h|--help)
                 __usage

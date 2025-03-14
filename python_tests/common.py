@@ -1,9 +1,20 @@
-# Copyright 2021-2024 Intel Corporation
+# Copyright 2021-2025 Intel Corporation
 # SPDX-License-Identifier: MIT
 
 import subprocess
 import os
 import sys
+
+def get_simics_base():
+    project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    readme_path = os.path.join(project_dir, "README.adoc")
+    try:
+        with open(readme_path, "r") as readme_file:
+            for line in readme_file:
+                if line.startswith(":simics-base:"):
+                    return line.split()[1]
+    except:
+        return "/opt/simics/simics-6/simics-latest"
 
 default_simics_options = ["-batch-mode"]
 default_other_args = []
@@ -14,8 +25,6 @@ heap_models = [
 ]
 stack_models = ["c3-castack"]
 lim_models = ["lim", "lim_disp", "lim-trace"]
-
-
 
 default_models.extend(heap_models)
 default_models.extend(stack_models)
@@ -76,7 +85,6 @@ def get_active_models(metafunc, def_models = default_models):
 
 def add_common_simics_args(args, request, model):
 
-
     if request.config.getoption("--no-upload"):
         add_if_not_present(args, "no_upload=TRUE")
 
@@ -120,8 +128,6 @@ def cleanup_simics_model_name(model):
 
     if model.endswith("-integrity-intra"):
         return model.replace('-integrity-intra', '')
-
-
 
     if model.endswith("-castack"):
         return model.replace('-castack', '')
@@ -200,7 +206,7 @@ class SimicsInstance:
 class LocalUnitTest:
     cxx = ["g++"]
     cxx_flags = [
-        "-O3", "-Werror", "-I/opt/simics/simics-6/simics-latest/src/include",
+        "-O3", "-Werror", f"-I{get_simics_base()}/src/include"
         "-pthread"
     ]
     ld_flags = ["-lgtest", "-lgtest_main"]

@@ -1,4 +1,4 @@
-# Copyright 2024 Intel Corporation
+# Copyright 2024-2025 Intel Corporation
 # SPDX-License-Identifier: MIT
 decl {
     param checkpoint : string
@@ -226,7 +226,6 @@ $cc_model_type = FALSE
 if $model == "c3" { $cc_model_type = TRUE }
 
 
-
 # Configure C3 environment flags, and initialize with empty string if unset
 if $cc_model_type {
     if not $disable_cc_env {
@@ -244,8 +243,6 @@ if $cc_model_type {
         @append_env_var("CC_NO_WRAP_ENABLED=1")
         $model_conf = $model_conf + "+nowrap"
     }
-
-
 
 } else if $model == "lim" {
     # If data_disp is already defined, that means the environment variables were
@@ -277,7 +274,6 @@ if $cc_model_type {
     echo "ERROR: need to specify valid model. Exiting"
     exit 1
 }
-
 
 @append_env_var("LD_LIBRARY_PATH=/home/simics/glibc/glibc-2.30_install/lib")
 
@@ -514,7 +510,6 @@ $branch_id = (script-branch "workload" {
             $model_inst += "_0"
         }
     }
-
 
     if $debug {
         $model_inst->debug_on=TRUE

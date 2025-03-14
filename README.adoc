@@ -11,9 +11,7 @@ endif::[]
 :source-highlighter: pygments
 :source-language: bash
 :ispm-base: intel-simics-package-manager-1.9.4
-:ispm-base-stem: intel-simics-package-manager-1.9.4-linux64
-:simics-base: /opt/simics/simics-6.0.198
-:simics-pkg-ver: 2024.25
+:simics-base: /opt/simics/simics-6/simics-6.0.198
 :simics-pkg-ver-stem: simics-6-packages-2024-25-linux64
 :simics-repo-url: https://github.com/IntelLabs/c3-simulator.git
 :simics-public-url: https://software.intel.com/content/www/us/en/develop/articles/simics-simulator.html
@@ -22,7 +20,6 @@ endif::[]
 :CKPT_GLIBC: checkpoints/cc_glibc.ckpt
 :CKPT_LLVM: checkpoints/cc_llvm.ckpt
 :CKPT_KERNEL: checkpoints/cc_kernel.ckpt
-:SIMICS_BIN: /opt/simics/simics-6/simics-latest/bin
 :SIMICS_DEF_MODULE: c3
 
 [WARNING]
@@ -71,6 +68,14 @@ See <<C3 development environment>> for more details on modifying and
 experimenting with the C3 Simics model and associated software artifacts. For
 more specific details on the Simics model, see <<C3 Simics simulation model>>.
 
+[NOTE]
+====
+Simics versions are defined through the `README.adoc`, with the docker
+container builds and Makefiles using the versions defined in the `README.adoc`
+properties. The variables are: `simics_base`, `simics-base` and
+`simics-pkg-ver-stem`.
+====
+
 === Quick-start: Setting up the C3 simulator
 
 To setup Simics, setup the build environment, and generate Simics checkpoints,
@@ -84,7 +89,7 @@ git clone --recurse-submodules {simics-repo-url} c3-simulator
 cd c3-simulator
 
 # Copy simics packages (or put files in /opt/simics/simics_packages_public)
-cp ~/Downloads/{ispm-base-stem}.tar.gz \
+cp ~/Downloads/{ispm-base}-linux64.tar.gz \
    ~/Downloads/{simics-pkg-ver-stem}.tar.gz \
    scripts/dokcer
 
@@ -229,7 +234,6 @@ To view a demo of this, run:
 make c3_docker-demo-lldb_debug_01
 ----
 
-
 == Tests and evaluations
 
 === Unit tests
@@ -248,7 +252,6 @@ pytest -n<NUM_JOBS> -v python_tests --checkpoint {ckpt_llvm} [--model <MODEL>]*
 pytest -n<NUM_JOBS> -v python_tests --checkpoint {ckpt_kernel} --have-kernel [--model <MODEL>]*
 ----
 
-
 Common options:
 
 [frame=none,grid=none,cols="1,4"]
@@ -259,7 +262,6 @@ Common options:
 | -d\|--dist=load       | Load-balance tests.
 | --have-kernel         | Run C3-kernel dependent tests
 |====
-
 
 You can also run individual unit tests. To do so, you will need some additional
 options: `include_folders` to copy the unit test include folder, and 2) add the
@@ -272,7 +274,6 @@ unit_tests include and `-DC3_MODEL define to `gcc_flags`:
     model={SIMICS_DEF_MODULE} \
     src_file=unit_tests/common/gtest_hello.cpp
 ----
-
 
 ==== Testing different configurations
 
@@ -351,7 +352,6 @@ An up-to-date list of recognized labels can be found in the
 | simics_args   | Additional arguments to pass to Simics when running test.
 | xfail         | Mark test as xfail for listed models.
 |====
-
 
 
 === Juliet
@@ -838,13 +838,11 @@ ${HOME}/.c3-linux-ccache
 ${HOME}/.c3-llvm-ccache
 ----
 
-
 The Buildroot systems will when available use a pre-built external toolchain to
 avoid building the whole toolchain during setup. This is stored in
 /opt/simics/buildroot_toolchains and defined in the
 `edk2_src_scripts/edk2_run_linux.sh` script and corresponding Buildroot
 configuration file defined in `edk2_src_scripts/edk2_run_linus.sh`.
-
 
 === General notes on Simics
 
@@ -901,8 +899,7 @@ board.mb.cpu0.mem[0][0].examine-memory (read-reg rip)
 NOTE: The dependencies and installation instruction are tested for Ubuntu 20.04.
 For other systems you may have to adapt the instruction.
 
-
-Download and install Simics v.{simics-pkg-ver} from {simics-public-url}.
+Download and install Simics {simics-pkg-ver-stem} from {simics-public-url}.
 
 Create an `/opt/simics` directory owned by the current user.
 
@@ -912,7 +909,7 @@ Simics:
 
 [source,subs=attributes]
 ----
-tar xf {ispm-base-stem}.tar.gz
+tar xf {ispm-base}-linux64.tar.gz
 {ispm-base}/ispm packages --install-bundle {simics-pkg-ver-stem}.ispm --install-dir {simics-base} --non-interactive
 ----
 
@@ -976,7 +973,7 @@ Once Simics is installed, you configure simics for the current project with:
 
 [source,subs=attributes]
 ----
-#  To setup with Simics in /opt/simics/simics-6/simics-latest/bin
+#  To setup with Simics in {simics-base}/bin
 make simics_setup
 
 #  or set other SIMICS_BIN directory with
@@ -1069,7 +1066,6 @@ annotations in comments in the source code files themselves.
 ----
 make documentation
 ----
-
 
 == Contributing to the C3-simulator
 

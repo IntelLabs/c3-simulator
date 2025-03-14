@@ -1,8 +1,13 @@
-# Copyright 2024 Intel Corporation
+# Copyright 2024-2025 Intel Corporation
 # SPDX-License-Identifier: MIT
 
 # Generate absolute path in case we need it elsewhere
 project_dir := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
+
+# The project Simics base package directory
+project_simics_dir= $(shell cat $(project_dir)/.project-properties/project-paths | grep simics-root | awk '{print $$2}')
+# The project Simics installation  directory
+project_simics_root = $(patsubst %/,%,$(dir $(project_simics_dir)))
 
 # INTERACTIVE is defined only if running in intractive shell
 INTERACTIVE := $(shell [ -t 0 ] && echo 1)
@@ -54,6 +59,7 @@ endif
 -include scripts/make/linux.mk
 -include scripts/make/llvm.mk
 -include scripts/make/pre-commit.mk
+-include scripts/make/risc-v.mk
 -include scripts/make/tests.mk
 
 # ENV vars added by Simics Makefiles (i.e., used by the Simics build)

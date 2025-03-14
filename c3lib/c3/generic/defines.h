@@ -1,4 +1,4 @@
-// Copyright 2016-2024 Intel Corporation
+// Copyright 2016-2025 Intel Corporation
 // SPDX-License-Identifier: MIT
 
 #ifndef C3LIB_C3_GENERIC_DEFINES_H_

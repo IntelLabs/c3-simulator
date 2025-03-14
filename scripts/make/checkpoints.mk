@@ -1,4 +1,4 @@
-# Copyright 2024 Intel Corporation
+# Copyright 2024-2025 Intel Corporation
 # SPDX-License-Identifier: MIT
 
 # Label for checkpoints; this will be postfixed to checkpoint names and the
@@ -53,7 +53,6 @@ CHECKPOINTS_TO_CLEAN = $(CKPT_KERNEL) $(CKPT_KERNEL_1B_OVF) $(CKPT_LLVM) $(CKPT_
 CHECKPOINTS_TO_CLEAN += $(CKPT_DEBUGGER) $(CKPT_KERNEL_PROT)
 CHECKPOINTS_TO_CLEAN += $(CKPT_GLIBC_NOWRAP)
 
-
 SIMICS_NOKERNEL_CHECKPOINT_ARG =
 ifneq ($(CKPT_NOKERNEL_BASE),)
 	SIMICS_NOKERNEL_CHECKPOINT_ARG = checkpoint=$(shell readlink -e $(CKPT_NOKERNEL_BASE))
@@ -66,7 +65,6 @@ CKPT_SIMICS_SCRIPT_ARGS =
 ifeq (${UPLOAD_UNIT_TESTS},1)
 	CKPT_SIMICS_SCRIPT_ARGS += upload_unit_tests=TRUE
 endif
-
 
 # Target for creating new shared clean ubuntu checkpoint
 $(CKPT_KERNEL_BASE).$(VERSION_LABEL): simics_setup
@@ -231,7 +229,6 @@ clean-checkpoints:
 have_ubuntu_base_checkpoint:
 	echo "$(CKPT_KERNEL_BASE)"
 	@test -e $(CKPT_KERNEL_BASE)
-
 
 .PHONY: mrproper
 mrproper:: clean-checkpoints

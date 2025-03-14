@@ -1,9 +1,10 @@
-# Copyright 2024 Intel Corporation
+# Copyright 2024-2025 Intel Corporation
 # SPDX-License-Identifier: MIT
 
 PHONY: demo-lldb_debug_01
 demo-lldb_debug_01:
-	test ! -e checkpoints/cc_kernel.ckpt || $(MAKE) ckpt-cc_kernel
+	$(MAKE)
+	test -e checkpoints/cc_kernel.ckpt || $(MAKE) ckpt-cc_kernel
 	$(MAKE) make_llvm-lldb-only
 ifeq (1,$(VERBOSE))
 	./scripts/demo/lldb_debug_01.sh --verbose
@@ -11,15 +12,16 @@ else
 	./scripts/demo/lldb_debug_01.sh
 endif
 
-
 .PHONY: scripts/demo/cwe457.sh
 scripts/demo/cwe457.sh:
-	test ! -e checkpoints/cc_kernel.ckpt || $(MAKE) ckpt-cc_kernel
+	$(MAKE)
+	test -e checkpoints/cc_kernel.ckpt || $(MAKE) ckpt-cc_kernel
 	$(MAKE) make_llvm
 
 .PHONY: scripts/demo/clang_tidy.sh
 scripts/demo/clang_tidy.sh:
-	test ! -e checkpoints/cc_kernel.ckpt || $(MAKE) ckpt-cc_kernel
+	$(MAKE)
+	test -e checkpoints/cc_kernel.ckpt || $(MAKE) ckpt-cc_kernel
 	$(MAKE) make_llvm
 
 demo-%: scripts/demo/%

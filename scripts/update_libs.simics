@@ -1,4 +1,4 @@
-# Copyright 2016-2024 Intel Corporation
+# Copyright 2016-2025 Intel Corporation
 # SPDX-License-Identifier: MIT
 
 decl {
@@ -176,7 +176,6 @@ script-branch "upload_and_build" {
 		@command_to_console("mkdir -p include")
 		@command_to_console("ln -s /home/simics/unit_tests/include/unit_tests include/unit_tests")
 	}
-
 
 	#####################################
 	#     Setup, configure, or build    #

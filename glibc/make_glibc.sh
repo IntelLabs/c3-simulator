@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2016-2024 Intel Corporation
+# Copyright 2016-2025 Intel Corporation
 # SPDX-License-Identifier: MIT
 
 set -euo pipefail
@@ -158,7 +158,6 @@ if [[ ${CC_NO_TRIPWIRES_ENABLE} == "1" ]]; then
     CPPFLAGS="${CPPFLAGS} -DCC_NO_TRIPWIRES_ENABLE"
     CFLAGS="${CFLAGS} -DCC_NO_TRIPWIRES_ENABLE"
 fi
-
 
 configure_args=(
     prefix="${prefix}"
